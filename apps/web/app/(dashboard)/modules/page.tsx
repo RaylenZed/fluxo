@@ -1,177 +1,262 @@
 "use client";
 import { useState } from "react";
-import { Link, ChevronRight, X } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2, Pencil, RefreshCw, Loader2, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-interface Module {
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
+
+interface Provider {
   id: string;
   name: string;
-  description: string;
-  author: string;
-  version: string;
-  sourceUrl: string;
-  enabled: boolean;
-  installed: boolean;
-  category: string;
+  url: string;
+  interval: number;
+  filter: string | null;
+  health_check_url: string | null;
+  last_updated: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-const initialModules: Module[] = [
-  { id: "1", name: "Block Ads", description: "Blocks advertisement domains and tracking pixels using a curated blocklist", author: "mihomo-party", version: "1.3.2", sourceUrl: "https://cdn.jsdelivr.net/gh/mihomo-party/modules/block-ads.js", enabled: true, installed: true, category: "Security" },
-  { id: "2", name: "HTTPS Unlock", description: "Unlock geo-restricted content via HTTPS header modification", author: "community", version: "0.8.1", sourceUrl: "https://raw.githubusercontent.com/unlock/modules/main/https-unlock.js", enabled: false, installed: true, category: "Unlock" },
-  { id: "3", name: "Remove Tracking", description: "Strip tracking parameters (UTM, fbclid, etc.) from URLs", author: "mihomo-party", version: "2.1.0", sourceUrl: "https://cdn.jsdelivr.net/gh/mihomo-party/modules/remove-tracking.js", enabled: true, installed: true, category: "Privacy" },
-  { id: "4", name: "Custom DNS", description: "Override DNS resolution for specific domains with custom rules", author: "community", version: "1.0.4", sourceUrl: "https://raw.githubusercontent.com/dns-rules/main/custom-dns.js", enabled: false, installed: true, category: "DNS" },
-  { id: "5", name: "YouTube Ad Skip", description: "Automatically skip YouTube advertisements", author: "yt-tools", version: "3.2.1", sourceUrl: "https://github.com/yt-tools/ad-skip", enabled: false, installed: false, category: "Media" },
-  { id: "6", name: "Netflix Quality", description: "Force higher quality streams on Netflix", author: "stream-tools", version: "1.0.0", sourceUrl: "https://github.com/stream-tools/netflix", enabled: false, installed: false, category: "Media" },
-];
+function useProviders() {
+  return useQuery({
+    queryKey: ["providers"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/providers`);
+      if (!res.ok) throw new Error("Failed to load providers");
+      return res.json() as Promise<Provider[]>;
+    },
+  });
+}
 
-const categoryColors: Record<string, string> = {
-  Security: "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  Privacy: "bg-[var(--brand-100)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]",
-  Unlock: "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  DNS: "bg-sky-50 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
-  Media: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
-};
+function formatInterval(seconds: number): string {
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
+  return `${Math.round(seconds / 86400)}d`;
+}
 
-export default function ModulesPage() {
-  const [modules, setModules] = useState<Module[]>(initialModules);
-  const [showInstall, setShowInstall] = useState(false);
-  const [installUrl, setInstallUrl] = useState("");
-  const [selectedModule, setSelectedModule] = useState<Module | null>(null);
+export default function ProvidersPage() {
+  const qc = useQueryClient();
+  const { data: providers = [], isLoading } = useProviders();
 
-  const toggleModule = (id: string) => {
-    setModules((prev) => prev.map((m) => (m.id === id ? { ...m, enabled: !m.enabled } : m)));
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    url: "",
+    interval: "86400",
+    filter: "",
+    healthCheckUrl: "",
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; url: string; interval: number; filter?: string; healthCheckUrl?: string }) => {
+      const res = await fetch(`${API}/api/providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider added"); },
+    onError: () => toast.error("Failed to add provider"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; url: string; interval: number; filter: string }> }) => {
+      const res = await fetch(`${API}/api/providers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider updated"); },
+    onError: () => toast.error("Failed to update provider"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API}/api/providers/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider deleted"); },
+    onError: () => toast.error("Failed to delete provider"),
+  });
+
+  const openNew = () => {
+    setEditingId(null);
+    setForm({ name: "", url: "", interval: "86400", filter: "", healthCheckUrl: "" });
+    setShowDialog(true);
   };
 
-  const installModule = (id: string) => {
-    setModules((prev) => prev.map((m) => (m.id === id ? { ...m, installed: true } : m)));
+  const openEdit = (p: Provider) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name,
+      url: p.url,
+      interval: String(p.interval),
+      filter: p.filter ?? "",
+      healthCheckUrl: p.health_check_url ?? "",
+    });
+    setShowDialog(true);
   };
 
-  const installed = modules.filter((m) => m.installed);
-  const available = modules.filter((m) => !m.installed);
+  const handleSubmit = () => {
+    if (!form.name.trim() || !form.url.trim()) return;
+    const data = {
+      name: form.name.trim(),
+      url: form.url.trim(),
+      interval: Number(form.interval),
+      ...(form.filter.trim() ? { filter: form.filter.trim() } : {}),
+      ...(form.healthCheckUrl.trim() ? { healthCheckUrl: form.healthCheckUrl.trim() } : {}),
+    };
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data });
+    } else {
+      createMutation.mutate(data);
+    }
+    setShowDialog(false);
+  };
 
-  function ModuleCard({ module, showInstallBtn }: { module: Module; showInstallBtn?: boolean }) {
-    return (
-      <Card
-        className={cn("cursor-pointer transition-all hover:shadow-md", selectedModule?.id === module.id && "border-[var(--brand-500)]")}
-        onClick={() => setSelectedModule(module)}
-      >
-        <div className="p-4 flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)] border border-[var(--border)] text-lg font-bold text-[var(--brand-500)]">
-            {module.name[0]}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-[var(--foreground)]">{module.name}</span>
-              <span className="text-[10px] text-[var(--muted)] font-mono">v{module.version}</span>
-              <span className={cn("text-[10px] font-semibold rounded-[6px] px-2 py-0.5", categoryColors[module.category] ?? "bg-[var(--surface-2)] text-[var(--muted)]")}>
-                {module.category}
-              </span>
-            </div>
-            <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-2">{module.description}</p>
-            <p className="text-[11px] text-[var(--muted)] mt-1">by {module.author}</p>
-          </div>
-          <div className="shrink-0 flex items-center gap-2">
-            {showInstallBtn ? (
-              <Button size="sm" variant="outline" className="text-xs" onClick={(e) => { e.stopPropagation(); installModule(module.id); }}>
-                Install
-              </Button>
-            ) : (
-              <Switch checked={module.enabled} onCheckedChange={() => toggleModule(module.id)} onClick={(e) => e.stopPropagation()} />
-            )}
-            <ChevronRight className="h-4 w-4 text-[var(--muted)]" />
-          </div>
-        </div>
-      </Card>
-    );
-  }
+  const handleUpdateNow = async (p: Provider) => {
+    try {
+      const res = await fetch(`${API}/api/mihomo/providers/${encodeURIComponent(p.name)}/update`, { method: "PUT" });
+      if (!res.ok) throw new Error();
+      toast.success(`Provider "${p.name}" updated`);
+    } catch {
+      toast.error("Failed to update provider — Mihomo may not be running");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Modules" description="Manage scripted modules">
-        <Button onClick={() => setShowInstall(true)} size="sm" variant="outline" className="gap-1.5 text-xs">
-          <Link className="h-3.5 w-3.5" />
-          Install from URL
+      <Topbar title="Providers" description="Manage proxy subscription providers">
+        <Button onClick={openNew} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
+          <Plus className="h-3.5 w-3.5" />
+          Add Provider
         </Button>
       </Topbar>
 
-      <div className="flex-1 p-6 overflow-auto">
-        <div className={cn("flex gap-5", selectedModule && "pr-0")}>
-          <div className="flex-1 min-w-0 space-y-5">
-            <Tabs defaultValue="installed">
-              <TabsList>
-                <TabsTrigger value="installed">Installed ({installed.length})</TabsTrigger>
-                <TabsTrigger value="available">Available ({available.length})</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="installed" className="mt-4 space-y-3">
-                {installed.map((m) => <ModuleCard key={m.id} module={m} />)}
-              </TabsContent>
-              <TabsContent value="available" className="mt-4 space-y-3">
-                {available.map((m) => <ModuleCard key={m.id} module={m} showInstallBtn />)}
-              </TabsContent>
-            </Tabs>
+      <div className="flex-1 p-6 overflow-auto space-y-4">
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />
           </div>
-
-          {/* Detail panel */}
-          {selectedModule && (
-            <div className="w-72 shrink-0">
-              <Card className="sticky top-0">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">{selectedModule.name}</CardTitle>
-                    <button onClick={() => setSelectedModule(null)} className="text-[var(--muted)] hover:text-[var(--foreground)]">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <p className="text-[var(--muted)] text-xs">{selectedModule.description}</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between"><span className="text-[var(--muted)]">Author</span><span className="text-[var(--foreground)]">{selectedModule.author}</span></div>
-                    <div className="flex justify-between"><span className="text-[var(--muted)]">Version</span><span className="font-mono text-[var(--foreground)]">v{selectedModule.version}</span></div>
-                    <div className="flex justify-between"><span className="text-[var(--muted)]">Category</span><span className="text-[var(--foreground)]">{selectedModule.category}</span></div>
-                    <div className="flex justify-between"><span className="text-[var(--muted)]">Status</span><Badge variant={selectedModule.enabled ? "success" : "secondary"}>{selectedModule.enabled ? "Enabled" : "Disabled"}</Badge></div>
-                  </div>
-                  <div className="pt-2 space-y-1.5">
-                    <p className="text-[10px] text-[var(--muted)] font-semibold uppercase tracking-wider">Source URL</p>
-                    <p className="text-[11px] font-mono text-[var(--muted)] break-all">{selectedModule.sourceUrl}</p>
-                  </div>
-                  {selectedModule.installed && (
-                    <div className="pt-2 flex gap-2">
-                      <Switch checked={selectedModule.enabled} onCheckedChange={() => toggleModule(selectedModule.id)} />
-                      <span className="text-xs text-[var(--muted)]">{selectedModule.enabled ? "Enabled" : "Disabled"}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+        ) : providers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[var(--surface-2)] border border-[var(--border)]">
+              <Package className="h-7 w-7 text-[var(--muted)]" />
             </div>
-          )}
-        </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-[var(--foreground)]">No providers yet</p>
+              <p className="text-xs text-[var(--muted)] mt-1">Add a subscription URL to import proxy nodes.</p>
+            </div>
+            <Button onClick={openNew} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
+              <Plus className="h-3.5 w-3.5" />
+              Add Provider
+            </Button>
+          </div>
+        ) : (
+          providers.map((p) => (
+            <Card key={p.id}>
+              <div className="p-5 flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)] border border-[var(--border)] text-base font-bold text-[var(--brand-500)]">
+                  {p.name[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-[var(--foreground)]">{p.name}</p>
+                  <p className="text-xs font-mono text-[var(--muted)] truncate">{p.url}</p>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+                    <span>Interval: {formatInterval(p.interval)}</span>
+                    {p.filter && <span>Filter: <code className="font-mono">{p.filter}</code></span>}
+                    {p.last_updated && <span>Updated: {new Date(p.last_updated).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs gap-1.5"
+                    onClick={() => handleUpdateNow(p)}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Update
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-[var(--muted)] hover:text-[var(--brand-500)]"
+                    onClick={() => openEdit(p)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-[var(--muted)] hover:text-red-500"
+                    onClick={() => deleteMutation.mutate(p.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
       </div>
 
-      {/* Install from URL Dialog */}
-      <Dialog open={showInstall} onOpenChange={setShowInstall}>
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Install Module from URL</DialogTitle>
+            <DialogTitle>{editingId ? "Edit Provider" : "Add Provider"}</DialogTitle>
           </DialogHeader>
           <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Module URL</label>
-              <Input value={installUrl} onChange={(e) => setInstallUrl(e.target.value)} placeholder="https://example.com/module.js" />
+              <label className="text-sm font-medium text-[var(--foreground)]">Name</label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="My Subscription" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[var(--foreground)]">Subscription URL</label>
+              <Input value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://sub.example.com/..." className="font-mono text-xs" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[var(--foreground)]">Auto-update Interval (seconds)</label>
+              <Select value={form.interval} onValueChange={(v) => setForm((f) => ({ ...f, interval: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3600">Every 1 hour</SelectItem>
+                  <SelectItem value="21600">Every 6 hours</SelectItem>
+                  <SelectItem value="86400">Every 24 hours</SelectItem>
+                  <SelectItem value="604800">Every 7 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[var(--foreground)]">Filter Regex <span className="text-[var(--muted)] font-normal">(optional)</span></label>
+              <Input value={form.filter} onChange={(e) => setForm((f) => ({ ...f, filter: e.target.value }))} placeholder="HK|JP|SG" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[var(--foreground)]">Health Check URL <span className="text-[var(--muted)] font-normal">(optional)</span></label>
+              <Input value={form.healthCheckUrl} onChange={(e) => setForm((f) => ({ ...f, healthCheckUrl: e.target.value }))} placeholder="https://www.gstatic.com/generate_204" className="font-mono text-xs" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowInstall(false)}>Cancel</Button>
-            <Button className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">Install</Button>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button onClick={handleSubmit} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
+              {editingId ? "Save" : "Add"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

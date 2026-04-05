@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Folder, Plus, Link, CheckCircle2, MoreHorizontal, Trash2, Copy, Pen, Download, Play } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Folder, Plus, Link, CheckCircle2, MoreHorizontal, Trash2, Copy, Pen, Download, Play, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,26 +13,35 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Topbar } from "@/components/layout/topbar";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 interface Profile {
   id: string;
   name: string;
   description: string;
-  proxies: number;
-  rules: number;
-  lastModified: string;
-  active: boolean;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
 }
 
-const initialProfiles: Profile[] = [
-  { id: "1", name: "Home", description: "Personal home network config", proxies: 4, rules: 13, lastModified: "Today, 10:24", active: true },
-  { id: "2", name: "Work VPN", description: "Corporate VPN with split tunneling", proxies: 2, rules: 8, lastModified: "Yesterday, 18:05", active: false },
-  { id: "3", name: "Gaming", description: "Low-latency gaming rules with CDN optimization", proxies: 6, rules: 22, lastModified: "3 days ago", active: false },
-];
+function useProfiles() {
+  return useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/profiles`);
+      if (!res.ok) throw new Error("Failed to load profiles");
+      return res.json() as Promise<Profile[]>;
+    },
+  });
+}
 
 export default function ProfilesPage() {
-  const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
+  const qc = useQueryClient();
+  const { data: profiles = [], isLoading } = useProfiles();
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -41,39 +51,57 @@ export default function ProfilesPage() {
   const [importUrl, setImportUrl] = useState("");
   const [importInterval, setImportInterval] = useState("24h");
 
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const res = await fetch(`${API}/api/profiles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success("Profile created"); },
+    onError: () => toast.error("Failed to create profile"),
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API}/api/profiles/${id}/activate`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to activate");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success("Profile activated"); },
+    onError: () => toast.error("Failed to activate profile"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API}/api/profiles/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success("Profile deleted"); },
+    onError: () => toast.error("Failed to delete profile"),
+  });
+
   const handleActivate = (id: string) => {
     setPendingActivateId(id);
     setShowConfirmDialog(true);
   };
 
   const confirmActivate = () => {
-    if (pendingActivateId) {
-      setProfiles((prev) => prev.map((p) => ({ ...p, active: p.id === pendingActivateId })));
-    }
+    if (pendingActivateId) activateMutation.mutate(pendingActivateId);
     setShowConfirmDialog(false);
     setPendingActivateId(null);
   };
 
   const handleCreate = () => {
     if (!newName.trim()) return;
-    setProfiles((prev) => [
-      ...prev,
-      { id: Date.now().toString(), name: newName.trim(), description: newDesc.trim(), proxies: 0, rules: 0, lastModified: "Just now", active: false },
-    ]);
+    createMutation.mutate({ name: newName.trim(), description: newDesc.trim() });
     setNewName("");
     setNewDesc("");
     setShowNewDialog(false);
-  };
-
-  const handleDelete = (id: string) => {
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const handleDuplicate = (profile: Profile) => {
-    setProfiles((prev) => [
-      ...prev,
-      { ...profile, id: Date.now().toString(), name: `${profile.name} (Copy)`, active: false, lastModified: "Just now" },
-    ]);
   };
 
   const pendingProfile = profiles.find((p) => p.id === pendingActivateId);
@@ -106,61 +134,85 @@ export default function ProfilesPage() {
         </Card>
 
         {/* Profile list */}
-        <div className="space-y-3">
-          {profiles.map((profile) => (
-            <Card
-              key={profile.id}
-              className={cn(
-                "transition-all duration-200",
-                profile.active && "border-[var(--brand-500)] shadow-[0_0_0_1px_var(--brand-500)]"
-              )}
-            >
-              <div className="p-5 flex items-start gap-4">
-                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] font-bold text-lg", profile.active ? "bg-[var(--brand-500)] text-white" : "bg-[var(--surface-2)] text-[var(--muted)]")}>
-                  {profile.name[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-semibold text-[var(--foreground)]">{profile.name}</h3>
-                    {profile.active && (
-                      <Badge variant="success" className="gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Active
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-[var(--muted)] mt-0.5 truncate">{profile.description}</p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-[var(--muted)]">
-                    <span>{profile.proxies} proxies</span>
-                    <span>{profile.rules} rules</span>
-                    <span>Modified {profile.lastModified}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {!profile.active && (
-                    <Button size="sm" variant="outline" className="text-xs gap-1.5" onClick={() => handleActivate(profile.id)}>
-                      <Play className="h-3 w-3" />
-                      Activate
-                    </Button>
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />
+          </div>
+        ) : profiles.length === 0 ? (
+          <div className="text-center py-12 text-sm text-[var(--muted)]">
+            No profiles yet. Create one to get started.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {profiles.map((profile) => {
+              const isActive = Boolean(profile.is_active);
+              return (
+                <Card
+                  key={profile.id}
+                  className={cn(
+                    "transition-all duration-200",
+                    isActive && "border-[var(--brand-500)] shadow-[0_0_0_1px_var(--brand-500)]"
                   )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" className="text-[var(--muted)]">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem className="gap-2"><Download className="h-3.5 w-3.5" />Export</DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2" onClick={() => handleDuplicate(profile)}><Copy className="h-3.5 w-3.5" />Duplicate</DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2"><Pen className="h-3.5 w-3.5" />Rename</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="gap-2 text-red-500" onClick={() => handleDelete(profile.id)}><Trash2 className="h-3.5 w-3.5" />Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                >
+                  <div className="p-5 flex items-start gap-4">
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] font-bold text-lg", isActive ? "bg-[var(--brand-500)] text-white" : "bg-[var(--surface-2)] text-[var(--muted)]")}>
+                      {profile.name[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-semibold text-[var(--foreground)]">{profile.name}</h3>
+                        {isActive && (
+                          <Badge variant="success" className="gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Active
+                          </Badge>
+                        )}
+                      </div>
+                      {profile.description && (
+                        <p className="text-sm text-[var(--muted)] mt-0.5 truncate">{profile.description}</p>
+                      )}
+                      <div className="flex items-center gap-4 mt-2 text-xs text-[var(--muted)]">
+                        <span>Updated {new Date(profile.updated_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isActive && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs gap-1.5"
+                          onClick={() => handleActivate(profile.id)}
+                          disabled={activateMutation.isPending}
+                        >
+                          <Play className="h-3 w-3" />
+                          Activate
+                        </Button>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" className="text-[var(--muted)]">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="gap-2"><Download className="h-3.5 w-3.5" />Export</DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2"><Copy className="h-3.5 w-3.5" />Duplicate</DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2"><Pen className="h-3.5 w-3.5" />Rename</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="gap-2 text-red-500"
+                            onClick={() => deleteMutation.mutate(profile.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* New Profile Dialog */}
@@ -212,7 +264,17 @@ export default function ProfilesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowImportDialog(false)}>Cancel</Button>
-            <Button className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">Import</Button>
+            <Button
+              onClick={() => {
+                if (!importUrl.trim()) return;
+                createMutation.mutate({ name: importUrl.split("/").pop() ?? "Imported", description: importUrl });
+                setImportUrl("");
+                setShowImportDialog(false);
+              }}
+              className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white"
+            >
+              Import
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

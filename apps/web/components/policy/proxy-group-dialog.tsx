@@ -26,10 +26,11 @@ const allProxies = [
 interface ProxyGroupDialogProps {
   open: boolean;
   onClose: () => void;
+  onSave?: (data: Record<string, unknown>) => void;
   groupName?: string;
 }
 
-export function ProxyGroupDialog({ open, onClose, groupName }: ProxyGroupDialogProps) {
+export function ProxyGroupDialog({ open, onClose, onSave, groupName }: ProxyGroupDialogProps) {
   const [name, setName] = useState(groupName ?? "");
   const [type, setType] = useState("select");
   const [selected, setSelected] = useState<string[]>(["US OwO", "KR ORACLE"]);
@@ -240,7 +241,21 @@ export function ProxyGroupDialog({ open, onClose, groupName }: ProxyGroupDialogP
 
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button onClick={onClose} disabled={!name.trim()}>
+          <Button
+            onClick={() => {
+              onSave?.({
+                name: name.trim(),
+                type,
+                proxies: selected,
+                filter: filterRegex || undefined,
+                url,
+                interval: parseInt(interval, 10),
+                use_all_proxies: useAllProxies ? 1 : 0,
+              });
+              onClose();
+            }}
+            disabled={!name.trim()}
+          >
             {groupName ? "Save Changes" : "Create Group"}
           </Button>
         </DialogFooter>

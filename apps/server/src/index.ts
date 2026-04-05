@@ -6,7 +6,9 @@ import { addClient, startMihomoRelay } from './modules/realtime/realtime.service
 const app = Fastify({ logger: true });
 
 async function main() {
-  await app.register(cors, { origin: '*' });
+  await app.register(cors, {
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true,
+  });
   await app.register(websocketPlugin);
 
   // Register all routes
@@ -16,6 +18,9 @@ async function main() {
   const { settingsRoutes } = await import('./modules/settings/settings.routes');
   const { mihomoRoutes } = await import('./modules/mihomo/mihomo.routes');
   const { profileRoutes } = await import('./modules/profile/profile.routes');
+  const { dnsRoutes } = await import('./modules/dns/dns.routes');
+  const { providerRoutes } = await import('./modules/provider/provider.routes');
+  const { ruleProviderRoutes } = await import('./modules/rule-provider/rule-provider.routes');
 
   await app.register(proxyRoutes, { prefix: '/api' });
   await app.register(groupRoutes, { prefix: '/api' });
@@ -23,6 +28,9 @@ async function main() {
   await app.register(settingsRoutes, { prefix: '/api' });
   await app.register(mihomoRoutes, { prefix: '/api' });
   await app.register(profileRoutes, { prefix: '/api' });
+  await app.register(dnsRoutes, { prefix: '/api' });
+  await app.register(providerRoutes, { prefix: '/api' });
+  await app.register(ruleProviderRoutes, { prefix: '/api' });
 
   // WebSocket endpoint for real-time data
   app.get('/ws', { websocket: true }, (socket) => {

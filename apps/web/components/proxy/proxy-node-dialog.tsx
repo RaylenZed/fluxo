@@ -21,6 +21,7 @@ type Protocol =
 interface ProxyNodeDialogProps {
   open: boolean;
   onClose: () => void;
+  onSave?: (data: { name: string; type: string; server: string; port: number; config: Record<string, unknown> }) => void;
   initialProtocol?: Protocol;
 }
 
@@ -573,7 +574,7 @@ function ProtocolFields({ protocol }: { protocol: Protocol }) {
 }
 
 // ─── Dialog ────────────────────────────────────────────────────────────────────
-export function ProxyNodeDialog({ open, onClose, initialProtocol = "VMess" }: ProxyNodeDialogProps) {
+export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMess" }: ProxyNodeDialogProps) {
   const [protocol, setProtocol] = useState<Protocol>(initialProtocol);
   const [name, setName] = useState("");
   const [server, setServer] = useState("");
@@ -691,7 +692,19 @@ export function ProxyNodeDialog({ open, onClose, initialProtocol = "VMess" }: Pr
             {testing ? "Testing…" : "Test Connection"}
           </Button>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button onClick={onClose} disabled={!name.trim() || !server.trim() || !port}>
+          <Button
+            onClick={() => {
+              onSave?.({
+                name: name.trim(),
+                type: protocol.toLowerCase(),
+                server: server.trim(),
+                port: parseInt(port, 10),
+                config: { udp, tfo, remarks },
+              });
+              onClose();
+            }}
+            disabled={!name.trim() || !server.trim() || !port}
+          >
             Save Node
           </Button>
         </DialogFooter>

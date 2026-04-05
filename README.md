@@ -24,7 +24,38 @@ Mihomo Party 是一个面向 Linux VPS 的现代化 Web 控制面板，像素级
 | Realtime | WebSocket |
 | Deploy | Docker + Docker Compose |
 
-## Development
+## Quick Start
+
+### Development
+
+```bash
+pnpm install
+pnpm dev  # starts both web (port 38080) and API server (port 8090)
+```
+
+Open http://localhost:38080
+
+### Production (Direct Install on Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RaylenZed/mihomo-party/main/install.sh | sudo bash
+```
+
+### Production (Docker)
+
+```bash
+docker compose up -d
+```
+
+## Architecture
+
+- **Web UI**: Next.js 16 on port 38080 (dev) / 8080 (production)
+- **API Server**: Fastify 5 on port 8090
+- **Mihomo Core**: Runs on host machine, managed via REST API
+
+The web panel connects to Mihomo's external controller (default `127.0.0.1:9090`). Configure in Settings → Remote.
+
+## Development (full)
 
 ```bash
 # Install dependencies

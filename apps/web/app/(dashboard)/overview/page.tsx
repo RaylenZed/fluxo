@@ -1,23 +1,27 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Copy, Check, RefreshCw, Globe, Lock, LayoutDashboard,
-  ArrowDown, ArrowUp, Activity, Cpu, Clock, Wifi
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Topbar } from "@/components/layout/topbar";
-import { formatBytes, cn } from "@/lib/utils";
+  ArrowDown, ArrowUp, Activity, Cpu, Clock, Wifi,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Topbar } from '@/components/layout/topbar';
+import { formatBytes, cn } from '@/lib/utils';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8090';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+    setTimeout(() => setCopied(false), 2000);
+  }, [text]);
   return (
     <button
       onClick={handleCopy}
@@ -29,29 +33,143 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function OverviewPage() {
-  const [systemProxy, setSystemProxy] = useState(true);
-  const [enhancedMode, setEnhancedMode] = useState(true);
-  const [gatewayMode, setGatewayMode] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Load settings
+  const { data: settings } = useQuery<Record<string, unknown>>({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/settings`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    refetchInterval: 30_000,
+  });
+
+  // Load Mihomo status
+  const { data: mihomoStatus } = useQuery<{ running: boolean; version: string | null }>({
+    queryKey: ['mihomo', 'status'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/mihomo/status`);
+      if (!res.ok) return { running: false, version: null };
+      return res.json();
+    },
+    refetchInterval: 10_000,
+    retry: false,
+  });
+
+  // Load connections count
+  const { data: connectionsData } = useQuery<{ connections?: unknown[] }>({
+    queryKey: ['mihomo', 'connections'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/mihomo/connections`);
+      if (!res.ok) return { connections: [] };
+      return res.json();
+    },
+    refetchInterval: 5_000,
+    retry: false,
+  });
+
+  // Load memory
+  const { data: memoryData } = useQuery<{ inuse?: number }>({
+    queryKey: ['mihomo', 'memory'],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/mihomo/memory`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    refetchInterval: 5_000,
+    retry: false,
+  });
+
+  // TUN toggle mutation
+  const tunMutation = useMutation({
+    mutationFn: async (enable: boolean) => {
+      const res = await fetch(`${API}/api/mihomo/tun`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      // Also persist to settings
+      await fetch(`${API}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 'tun.enable': enable }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('TUN setting saved (apply config to activate)');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: () => toast.error('Failed to update TUN'),
+  });
+
+  // Apply config mutation
+  const applyConfig = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API}/api/config/apply`, { method: 'POST' });
+      if (!res.ok) throw new Error('Apply failed');
+      return res.json();
+    },
+    onSuccess: () => toast.success('Config reloaded'),
+    onError: () => toast.error('Failed to reload config'),
+  });
+
+  // Derive values from settings
+  const mixedPort = (settings?.['general.mixed_port'] as number) ?? 7890;
+  const externalController = (settings?.['mihomo.external_controller'] as string) ?? '127.0.0.1:9090';
+  const tunEnabled = Boolean(settings?.['tun.enable'] ?? false);
+  const currentMode = (settings?.['general.mode'] as string) ?? 'rule';
+  const connectionCount = connectionsData?.connections?.length ?? 0;
+  const memoryInuse = memoryData?.inuse;
 
   const proxyAddresses = [
-    { label: "HTTP Proxy", value: "127.0.0.1:7890" },
-    { label: "SOCKS5", value: "127.0.0.1:7891" },
-    { label: "Mixed Port", value: "127.0.0.1:7893" },
+    { label: 'HTTP Proxy', value: `127.0.0.1:${mixedPort}` },
+    { label: 'SOCKS5', value: `127.0.0.1:${mixedPort}` },
+    { label: 'Mixed Port', value: `127.0.0.1:${mixedPort}` },
   ];
 
   const statusItems = [
-    { label: "Mode", value: "Rules", icon: Activity, iconColor: "bg-[var(--brand-100)] text-[var(--brand-500)] dark:bg-[var(--brand-500)]/20" },
-    { label: "Connections", value: "104", icon: Wifi, iconColor: "bg-sky-50 text-sky-500 dark:bg-sky-500/20" },
-    { label: "Memory", value: "128 MB", icon: Cpu, iconColor: "bg-amber-50 text-amber-500 dark:bg-amber-500/20" },
-    { label: "Uptime", value: "3h 24m", icon: Clock, iconColor: "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/20" },
+    {
+      label: 'Mode',
+      value: currentMode.charAt(0).toUpperCase() + currentMode.slice(1),
+      icon: Activity,
+      iconColor: 'bg-[var(--brand-100)] text-[var(--brand-500)] dark:bg-[var(--brand-500)]/20',
+    },
+    {
+      label: 'Connections',
+      value: String(connectionCount),
+      icon: Wifi,
+      iconColor: 'bg-sky-50 text-sky-500 dark:bg-sky-500/20',
+    },
+    {
+      label: 'Memory',
+      value: memoryInuse != null ? formatBytes(memoryInuse) : 'N/A',
+      icon: Cpu,
+      iconColor: 'bg-amber-50 text-amber-500 dark:bg-amber-500/20',
+    },
+    {
+      label: 'Uptime',
+      value: 'N/A',
+      icon: Clock,
+      iconColor: 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/20',
+    },
   ];
 
   return (
     <div className="flex flex-col h-full">
       <Topbar title="Overview" description="Network control center">
-        <Button size="sm" variant="outline" className="gap-2 text-xs">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Reload Config
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-2 text-xs"
+          onClick={() => applyConfig.mutate()}
+          disabled={applyConfig.isPending}
+        >
+          <RefreshCw className={cn('h-3.5 w-3.5', applyConfig.isPending && 'animate-spin')} />
+          {applyConfig.isPending ? 'Reloading…' : 'Reload Config'}
         </Button>
       </Topbar>
 
@@ -60,7 +178,7 @@ export default function OverviewPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statusItems.map((item) => (
             <Card key={item.label} className="p-4 flex items-start gap-3">
-              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]", item.iconColor)}>
+              <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]', item.iconColor)}>
                 <item.icon className="h-5 w-5" />
               </div>
               <div>
@@ -78,22 +196,44 @@ export default function OverviewPage() {
               <CardTitle className="text-sm font-semibold">Network Mode</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { label: "System Proxy", description: "Route system traffic through Mihomo", checked: systemProxy, onCheckedChange: setSystemProxy },
-                { label: "Enhanced Mode (TUN)", description: "Capture all traffic via virtual NIC", checked: enhancedMode, onCheckedChange: setEnhancedMode },
-                { label: "Gateway Mode", description: "Act as gateway for LAN devices", checked: gatewayMode, onCheckedChange: setGatewayMode },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--foreground)]">{item.label}</p>
-                    <p className="text-xs text-[var(--muted)] mt-0.5">{item.description}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={item.checked ? "success" : "secondary"}>{item.checked ? "Active" : "Inactive"}</Badge>
-                    <Switch checked={item.checked} onCheckedChange={item.onCheckedChange} />
-                  </div>
+              {/* System Proxy — OS-level, not directly controllable on Linux VPS */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--foreground)]">System Proxy</p>
+                  <p className="text-xs text-[var(--muted)] mt-0.5">System proxy is managed at OS level on Linux</p>
                 </div>
-              ))}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="secondary">OS-managed</Badge>
+                </div>
+              </div>
+
+              {/* Enhanced Mode (TUN) */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--foreground)]">Enhanced Mode (TUN)</p>
+                  <p className="text-xs text-[var(--muted)] mt-0.5">Capture all traffic via virtual NIC</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant={tunEnabled ? 'success' : 'secondary'}>{tunEnabled ? 'Active' : 'Inactive'}</Badge>
+                  <Switch
+                    checked={tunEnabled}
+                    onCheckedChange={(v) => tunMutation.mutate(v)}
+                    disabled={tunMutation.isPending}
+                  />
+                </div>
+              </div>
+
+              {/* Gateway Mode — label only */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--foreground)]">Gateway Mode</p>
+                  <p className="text-xs text-[var(--muted)] mt-0.5">Act as gateway for LAN devices</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="secondary">Inactive</Badge>
+                  <Switch checked={false} disabled />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -104,7 +244,10 @@ export default function OverviewPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {proxyAddresses.map((addr) => (
-                <div key={addr.label} className="flex items-center justify-between rounded-[10px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]">
+                <div
+                  key={addr.label}
+                  className="flex items-center justify-between rounded-[10px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]"
+                >
                   <div>
                     <p className="text-xs text-[var(--muted)] font-medium">{addr.label}</p>
                     <p className="text-sm font-mono font-semibold text-[var(--foreground)] mt-0.5">{addr.value}</p>
@@ -122,9 +265,9 @@ export default function OverviewPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: "External Controller", value: "127.0.0.1:9090", icon: Globe },
-                { label: "API Key", value: "••••••••••••••••", icon: Lock },
-                { label: "Web Dashboard", value: "http://127.0.0.1:9090/ui", icon: LayoutDashboard },
+                { label: 'External Controller', value: externalController, icon: Globe },
+                { label: 'API Secret', value: '••••••••••••••••', icon: Lock },
+                { label: 'Web Dashboard', value: `http://${externalController}/ui`, icon: LayoutDashboard },
               ].map((info) => (
                 <div key={info.label} className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)]">
@@ -140,20 +283,28 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
 
-          {/* Traffic Summary */}
+          {/* Mihomo Status */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Traffic Summary</CardTitle>
-              <p className="text-xs text-[var(--muted)]">This session</p>
+              <CardTitle className="text-sm font-semibold">Mihomo Core</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Badge variant={mihomoStatus?.running ? 'success' : 'destructive'}>
+                  {mihomoStatus?.running ? 'Running' : 'Stopped'}
+                </Badge>
+                {mihomoStatus?.version && (
+                  <span className="text-xs text-[var(--muted)] font-mono">{mihomoStatus.version}</span>
+                )}
+              </div>
+
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[var(--brand-100)] text-[var(--brand-500)] dark:bg-[var(--brand-500)]/20">
                   <ArrowDown className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted)] font-medium">Downloaded</p>
-                  <p className="text-2xl font-extrabold text-[var(--foreground)] tracking-tighter">{formatBytes(4.67 * 1024 * 1024 * 1024)}</p>
+                  <p className="text-2xl font-extrabold text-[var(--foreground)] tracking-tighter">—</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -162,13 +313,7 @@ export default function OverviewPage() {
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted)] font-medium">Uploaded</p>
-                  <p className="text-2xl font-extrabold text-[var(--foreground)] tracking-tighter">{formatBytes(1.59 * 1024 * 1024 * 1024)}</p>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-[var(--border)]">
-                <div className="flex justify-between text-xs text-[var(--muted)]">
-                  <span>Session started</span>
-                  <span>3h 24m ago</span>
+                  <p className="text-2xl font-extrabold text-[var(--foreground)] tracking-tighter">—</p>
                 </div>
               </div>
             </CardContent>

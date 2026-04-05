@@ -1,310 +1,291 @@
 "use client";
 import { useState } from "react";
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { Plus, Download, Upload, GripVertical, Trash2, Pen, Play, Check, X } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2, Loader2, Database, Globe, Map } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type RuleType = "header-modify" | "302" | "reject" | "reject-200" | "302-js";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
-interface RewriteRule {
+interface RuleProvider {
   id: string;
-  pattern: string;
-  type: RuleType;
-  value: string;
-  enabled: boolean;
+  name: string;
+  type: string;
+  behavior: string;
+  url: string | null;
+  path: string | null;
+  interval: number;
+  policy: string;
+  created_at: string;
+  updated_at: string;
 }
 
-const initialRules: RewriteRule[] = [
-  { id: "1", pattern: "^https://www\\.google\\.cn(.*)", type: "header-modify", value: "add header X-Country: CN", enabled: true },
-  { id: "2", pattern: "^https://.*\\.doubleclick\\.net", type: "reject", value: "", enabled: true },
-  { id: "3", pattern: "^http://(.*)", type: "302", value: "https://$1", enabled: true },
-  { id: "4", pattern: "^https://www\\.youtube\\.com/get_video_info", type: "reject-200", value: "", enabled: false },
-];
+function useRuleProviders() {
+  return useQuery({
+    queryKey: ["rule-providers"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/rule-providers`);
+      if (!res.ok) throw new Error("Failed to load rule providers");
+      return res.json() as Promise<RuleProvider[]>;
+    },
+  });
+}
 
-const typeColors: Record<RuleType, string> = {
-  "header-modify": "bg-[var(--brand-100)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]",
-  "302": "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-  "reject": "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  "reject-200": "bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  "302-js": "bg-sky-50 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
+const typeColors: Record<string, string> = {
+  http: "bg-[var(--brand-100)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]",
+  file: "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  inline: "bg-sky-50 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
 };
 
-function SortableRow({
-  rule,
-  index,
-  onToggle,
-  onDelete,
-  onEdit,
-}: {
-  rule: RewriteRule;
-  index: number;
-  onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
-  onEdit: (rule: RewriteRule) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rule.id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
+const behaviorColors: Record<string, string> = {
+  domain: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  ipcidr: "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  classical: "bg-zinc-50 text-zinc-700 dark:bg-zinc-500/20 dark:text-zinc-300",
+};
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-center gap-3 rounded-[10px] px-2 py-2.5 transition-colors group",
-        isDragging ? "bg-[var(--surface-2)] shadow-lg opacity-90 z-10" : "hover:bg-[var(--surface-2)]",
-        !rule.enabled && "opacity-50"
-      )}
-    >
-      <button {...attributes} {...listeners} className="text-[var(--muted)] hover:text-[var(--foreground)] cursor-grab active:cursor-grabbing shrink-0 touch-none">
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <span className="text-xs text-[var(--muted)] w-5 shrink-0 font-mono">{index + 1}</span>
-      <code className="flex-1 min-w-0 text-xs font-mono text-[var(--foreground)] truncate">{rule.pattern}</code>
-      <span className={cn("hidden sm:block text-[11px] font-semibold rounded-[6px] px-2 py-0.5 shrink-0", typeColors[rule.type])}>{rule.type}</span>
-      <code className="hidden md:block flex-1 min-w-0 text-[11px] font-mono text-[var(--muted)] truncate max-w-[180px]">{rule.value || "—"}</code>
-      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-        <Switch checked={rule.enabled} onCheckedChange={() => onToggle(rule.id)} />
-        <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-[var(--brand-500)] transition-opacity" onClick={() => onEdit(rule)}>
-          <Pen className="h-3.5 w-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-red-500 transition-opacity" onClick={() => onDelete(rule.id)}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
-  );
-}
+const policyColors: Record<string, string> = {
+  DIRECT: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  REJECT: "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+};
 
-export default function RewritePage() {
-  const [rules, setRules] = useState<RewriteRule[]>(initialRules);
+const defaultQuickAdd = [
+  {
+    label: "GeoIP CN (Direct)",
+    icon: Map,
+    data: { name: "geoip-cn", type: "http", behavior: "ipcidr", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt", interval: 86400, policy: "DIRECT" },
+  },
+  {
+    label: "GeoSite CN (Direct)",
+    icon: Globe,
+    data: { name: "geosite-cn", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt", interval: 86400, policy: "DIRECT" },
+  },
+  {
+    label: "Reject Ads",
+    icon: Database,
+    data: { name: "reject-ads", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt", interval: 86400, policy: "REJECT" },
+  },
+];
+
+export default function RuleProvidersPage() {
+  const qc = useQueryClient();
+  const { data: providers = [], isLoading } = useRuleProviders();
+
   const [showDialog, setShowDialog] = useState(false);
-  const [editingRule, setEditingRule] = useState<RewriteRule | null>(null);
-  const [form, setForm] = useState<Omit<RewriteRule, "id">>({ pattern: "", type: "302", value: "", enabled: true });
-  const [testUrl, setTestUrl] = useState("");
-  const [testResult, setTestResult] = useState<{ matched: RewriteRule; description: string } | null>(null);
-  const [testNoMatch, setTestNoMatch] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    type: "http",
+    behavior: "domain",
+    url: "",
+    policy: "DIRECT",
+    interval: "86400",
+  });
 
-  const sensors = useSensors(useSensor(PointerSensor));
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setRules((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; type: string; behavior: string; url?: string; interval: number; policy: string }) => {
+      const res = await fetch(`${API}/api/rule-providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
-    }
-  };
+      if (!res.ok) throw new Error("Failed to create");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success("Rule provider added"); },
+    onError: () => toast.error("Failed to add rule provider"),
+  });
 
-  const toggleRule = (id: string) => setRules((prev) => prev.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  const deleteRule = (id: string) => setRules((prev) => prev.filter((r) => r.id !== id));
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API}/api/rule-providers/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success("Rule provider deleted"); },
+    onError: () => toast.error("Failed to delete rule provider"),
+  });
 
-  const openNew = () => {
-    setEditingRule(null);
-    setForm({ pattern: "", type: "302", value: "", enabled: true });
-    setShowDialog(true);
-  };
-
-  const openEdit = (rule: RewriteRule) => {
-    setEditingRule(rule);
-    setForm({ pattern: rule.pattern, type: rule.type, value: rule.value, enabled: rule.enabled });
-    setShowDialog(true);
-  };
-
-  const saveRule = () => {
-    if (!form.pattern.trim()) return;
-    if (editingRule) {
-      setRules((prev) => prev.map((r) => r.id === editingRule.id ? { ...r, ...form } : r));
-    } else {
-      setRules((prev) => [...prev, { id: Date.now().toString(), ...form }]);
-    }
+  const handleSubmit = () => {
+    if (!form.name.trim()) return;
+    createMutation.mutate({
+      name: form.name.trim(),
+      type: form.type,
+      behavior: form.behavior,
+      ...(form.url.trim() ? { url: form.url.trim() } : {}),
+      interval: Number(form.interval),
+      policy: form.policy,
+    });
     setShowDialog(false);
   };
 
-  const testMatch = () => {
-    if (!testUrl.trim()) return;
-    const match = rules.find((r) => {
-      try { return new RegExp(r.pattern).test(testUrl); } catch { return false; }
-    });
-    if (match) {
-      const desc = match.type === "reject" ? `Rejected by rule #${rules.indexOf(match) + 1}`
-        : match.type === "302" ? `Redirected → ${testUrl.replace(new RegExp(match.pattern), match.value)}`
-        : `Header modified: ${match.value}`;
-      setTestResult({ matched: match, description: desc });
-      setTestNoMatch(false);
-    } else {
-      setTestResult(null);
-      setTestNoMatch(true);
-    }
+  const handleQuickAdd = (item: typeof defaultQuickAdd[0]) => {
+    createMutation.mutate(item.data);
   };
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Rewrite" description="URL rewrite rules">
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-          <Upload className="h-3.5 w-3.5" />
-          Import
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </Button>
-        <Button size="sm" onClick={openNew} className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
+      <Topbar title="Rule Sets" description="Manage rule-provider subscriptions">
+        <Button onClick={() => setShowDialog(true)} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
           <Plus className="h-3.5 w-3.5" />
-          Add Rule
+          Add Rule Set
         </Button>
       </Topbar>
 
       <div className="flex-1 p-6 overflow-auto space-y-5">
-        {/* Rule table */}
-        <Card>
-          <div className="px-3 py-2.5 border-b border-[var(--border)] flex items-center gap-3">
-            <span className="w-4 shrink-0" />
-            <span className="w-5 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">#</span>
-            <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Pattern</span>
-            <span className="hidden sm:block w-28 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] shrink-0">Type</span>
-            <span className="hidden md:block w-48 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] shrink-0">Value</span>
-            <span className="w-24 shrink-0" />
-          </div>
-          <CardContent className="pt-2 pb-2 px-2">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-0.5">
-                  {rules.map((rule, i) => (
-                    <SortableRow
-                      key={rule.id}
-                      rule={rule}
-                      index={i}
-                      onToggle={toggleRule}
-                      onDelete={deleteRule}
-                      onEdit={openEdit}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-            {rules.length === 0 && (
-              <p className="text-center text-sm text-[var(--muted)] py-8">No rewrite rules. Click "Add Rule" to get started.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Rule testing */}
+        {/* Quick-add section */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Rule Testing</CardTitle>
-            <p className="text-xs text-[var(--muted)]">Enter a URL to see which rule matches</p>
+            <CardTitle className="text-sm font-semibold">Quick Add</CardTitle>
+            <p className="text-xs text-[var(--muted)]">Add popular rule sets with one click</p>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                value={testUrl}
-                onChange={(e) => { setTestUrl(e.target.value); setTestResult(null); setTestNoMatch(false); }}
-                onKeyDown={(e) => e.key === "Enter" && testMatch()}
-                placeholder="https://www.example.com/path?query=1"
-                className="flex-1 font-mono text-sm"
-              />
-              <Button onClick={testMatch} size="sm" variant="outline" className="gap-1.5 shrink-0">
-                <Play className="h-3.5 w-3.5" />
-                Test
-              </Button>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {defaultQuickAdd.map((item) => {
+                const Icon = item.icon;
+                const exists = providers.some((p) => p.name === item.data.name);
+                return (
+                  <Button
+                    key={item.label}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    disabled={exists || createMutation.isPending}
+                    onClick={() => handleQuickAdd(item)}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {exists ? `${item.label} (added)` : item.label}
+                  </Button>
+                );
+              })}
             </div>
-            {testResult && (
-              <div className="rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-4 py-3 flex items-start gap-3">
-                <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">Matched rule #{rules.indexOf(testResult.matched) + 1}</p>
-                  <p className="text-emerald-600 dark:text-emerald-400 text-xs mt-0.5">{testResult.description}</p>
-                  <p className="text-emerald-600 dark:text-emerald-400 text-xs font-mono mt-1">{testResult.matched.pattern}</p>
-                </div>
-              </div>
-            )}
-            {testNoMatch && (
-              <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] px-4 py-3 flex items-start gap-3">
-                <X className="h-4 w-4 text-[var(--muted)] mt-0.5 shrink-0" />
-                <p className="text-sm text-[var(--muted)]">No rules matched this URL.</p>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        {/* Rule providers list */}
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />
+          </div>
+        ) : providers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[var(--surface-2)] border border-[var(--border)]">
+              <Database className="h-7 w-7 text-[var(--muted)]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-[var(--foreground)]">No rule sets yet</p>
+              <p className="text-xs text-[var(--muted)] mt-1">Add rule-provider subscriptions or use the quick add buttons above.</p>
+            </div>
+          </div>
+        ) : (
+          <Card>
+            <div className="px-4 py-2.5 border-b border-[var(--border)] grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 items-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Name</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-16">Type</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden sm:block">Behavior</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">Policy</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">Updated</span>
+              <span className="w-8" />
+            </div>
+            <CardContent className="pt-2 pb-2 px-2 space-y-0.5">
+              {providers.map((p) => (
+                <div key={p.id} className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 items-center rounded-[10px] px-2 py-2.5 hover:bg-[var(--surface-2)] group">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[var(--foreground)] truncate">{p.name}</p>
+                    {p.url && <p className="text-[11px] font-mono text-[var(--muted)] truncate">{p.url}</p>}
+                  </div>
+                  <div className="w-16">
+                    <span className={cn("text-[11px] font-semibold rounded-[6px] px-2 py-0.5", typeColors[p.type] ?? "bg-[var(--surface-2)] text-[var(--muted)]")}>
+                      {p.type}
+                    </span>
+                  </div>
+                  <div className="w-20 hidden sm:block">
+                    <span className={cn("text-[11px] font-semibold rounded-[6px] px-2 py-0.5", behaviorColors[p.behavior] ?? "bg-[var(--surface-2)] text-[var(--muted)]")}>
+                      {p.behavior}
+                    </span>
+                  </div>
+                  <div className="w-20 hidden md:block">
+                    <span className={cn("text-[11px] font-semibold rounded-[6px] px-2 py-0.5", policyColors[p.policy] ?? "bg-[var(--surface-2)] text-[var(--muted)]")}>
+                      {p.policy}
+                    </span>
+                  </div>
+                  <div className="w-20 hidden md:block">
+                    <span className="text-xs text-[var(--muted)]">{new Date(p.updated_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="w-8">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-red-500 transition-opacity"
+                      onClick={() => deleteMutation.mutate(p.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingRule ? "Edit Rule" : "New Rewrite Rule"}</DialogTitle>
+            <DialogTitle>Add Rule Set</DialogTitle>
           </DialogHeader>
           <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Pattern (Regex)</label>
-              <Input
-                value={form.pattern}
-                onChange={(e) => setForm((f) => ({ ...f, pattern: e.target.value }))}
-                placeholder="^https://www\.example\.com(.*)"
-                className="font-mono"
-              />
-              <p className="text-xs text-[var(--muted)]">Use standard JavaScript regex syntax. Capture groups available via $1, $2…</p>
+              <label className="text-sm font-medium text-[var(--foreground)]">Name</label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="my-rule-set" className="font-mono" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[var(--foreground)]">Type</label>
+                <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="file">File</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[var(--foreground)]">Behavior</label>
+                <Select value={form.behavior} onValueChange={(v) => setForm((f) => ({ ...f, behavior: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="domain">Domain</SelectItem>
+                    <SelectItem value="ipcidr">IP CIDR</SelectItem>
+                    <SelectItem value="classical">Classical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Type</label>
-              <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v as RuleType }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="302">302 Redirect</SelectItem>
-                  <SelectItem value="reject">Reject</SelectItem>
-                  <SelectItem value="reject-200">Reject (200)</SelectItem>
-                  <SelectItem value="header-modify">Header Modify</SelectItem>
-                  <SelectItem value="302-js">302 (JS)</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium text-[var(--foreground)]">URL</label>
+              <Input value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://cdn.jsdelivr.net/..." className="font-mono text-xs" />
             </div>
-            {(form.type === "302" || form.type === "302-js" || form.type === "header-modify") && (
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-[var(--foreground)]">
-                  {form.type === "header-modify" ? "Header Action" : "Redirect URL"}
-                </label>
-                <Input
-                  value={form.value}
-                  onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                  placeholder={form.type === "header-modify" ? "add header X-Custom: value" : "https://$1"}
-                  className="font-mono"
-                />
+                <label className="text-sm font-medium text-[var(--foreground)]">Policy</label>
+                <Input value={form.policy} onChange={(e) => setForm((f) => ({ ...f, policy: e.target.value }))} placeholder="DIRECT" />
               </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Switch checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
-              <label className="text-sm text-[var(--muted)]">Enabled</label>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[var(--foreground)]">Interval (s)</label>
+                <Input value={form.interval} onChange={(e) => setForm((f) => ({ ...f, interval: e.target.value }))} type="number" />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-            <Button onClick={saveRule} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
-              {editingRule ? "Save" : "Add Rule"}
-            </Button>
+            <Button onClick={handleSubmit} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

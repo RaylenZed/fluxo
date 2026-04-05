@@ -4,10 +4,11 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Activity, LayoutDashboard, Eye, Cpu, Monitor, GitBranch,
-  List, Wifi, Lock, RefreshCw, Puzzle, FileText, Code,
-  Settings, Server, ChevronRight, Zap, Globe
+  List, Info, Database, Package, FileText, CalendarClock,
+  Settings, Server, ChevronRight, Zap, Globe, ScrollText
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMihomoStatus } from "@/lib/hooks";
 
 const navItems = [
   {
@@ -33,19 +34,19 @@ const navItems = [
     ],
   },
   {
-    group: "HTTP",
+    group: "TOOLS",
     items: [
-      { href: "/capture", label: "Capture", icon: Wifi },
-      { href: "/mitm", label: "Decrypt", icon: Lock },
-      { href: "/rewrite", label: "Rewrite", icon: RefreshCw },
+      { href: "/capture", label: "Logs", icon: ScrollText },
+      { href: "/mitm", label: "Proxy Info", icon: Info },
+      { href: "/rewrite", label: "Rule Sets", icon: Database },
     ],
   },
   {
     group: "SYSTEM",
     items: [
-      { href: "/modules", label: "Modules", icon: Puzzle },
+      { href: "/modules", label: "Providers", icon: Package },
       { href: "/profiles", label: "Profiles", icon: FileText },
-      { href: "/scripts", label: "Scripts", icon: Code },
+      { href: "/scripts", label: "Tasks", icon: CalendarClock },
       { href: "/dns", label: "DNS", icon: Globe },
     ],
   },
@@ -76,6 +77,9 @@ function MihomoStatusDot({ running = false }: { running?: boolean }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: statusData } = useMihomoStatus();
+  const isRunning = statusData?.running ?? false;
+  const version = statusData?.version ?? null;
 
   return (
     <aside className="flex h-screen w-[220px] flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] overflow-hidden shrink-0">
@@ -92,8 +96,10 @@ export function Sidebar() {
 
       {/* Mihomo status */}
       <div className="mx-3 mb-3 flex items-center justify-between rounded-[12px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]">
-        <MihomoStatusDot running={true} />
-        <span className="text-xs text-[var(--muted)]">v1.19.0</span>
+        <MihomoStatusDot running={isRunning} />
+        <span className="text-xs text-[var(--muted)]">
+          {version ? `v${version}` : 'Unknown'}
+        </span>
       </div>
 
       {/* Nav */}

@@ -34,6 +34,17 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // GET /api/config/preview — preview YAML without writing
+  fastify.get('/config/preview', async (_req, reply) => {
+    try {
+      const yaml = await generateConfig();
+      reply.header('Content-Type', 'text/plain').send(yaml);
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(500).send({ error: 'Failed to generate config' });
+    }
+  });
+
   fastify.post('/config/apply', async (_req, reply) => {
     try {
       const configPath = process.env.CONFIG_PATH || path.join(process.cwd(), 'data', 'config.yaml');

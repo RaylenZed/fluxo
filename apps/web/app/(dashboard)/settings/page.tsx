@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { ExternalLink, Save } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Save, RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,41 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Topbar } from "@/components/layout/topbar";
+import { toast } from "sonner";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
+
+function useSettings() {
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/settings`);
+      if (!res.ok) throw new Error("Failed to load settings");
+      return res.json() as Promise<Record<string, unknown>>;
+    },
+    staleTime: 60_000,
+  });
+}
+
+function useSaveSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await fetch(`${API}/api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Settings saved");
+    },
+    onError: () => toast.error("Failed to save settings"),
+  });
+}
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
@@ -33,94 +69,122 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function SettingsPage() {
+  const { data: settings, isLoading } = useSettings();
+  const saveSettings = useSaveSettings();
+
   // General
-  const [startLogin, setStartLogin] = useState(true);
-  const [launchMinimized, setLaunchMinimized] = useState(false);
-  const [allowLAN, setAllowLAN] = useState(true);
-  const [ipv6DNS, setIpv6DNS] = useState(false);
-  const [doh, setDoh] = useState(true);
-  const [geoipUrl, setGeoipUrl] = useState("https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb");
-  const [geositeUrl, setGeositeUrl] = useState("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat");
-  const [updateInterval, setUpdateInterval] = useState("24h");
+  const [mixedPort, setMixedPort] = useState(7890);
+  const [allowLAN, setAllowLAN] = useState(false);
   const [logLevel, setLogLevel] = useState("info");
+  const [ipv6, setIpv6] = useState(false);
+
+  // TUN
+  const [tunEnable, setTunEnable] = useState(false);
+  const [tunStack, setTunStack] = useState("system");
+  const [tunAutoRoute, setTunAutoRoute] = useState(true);
+  const [tunDnsHijack, setTunDnsHijack] = useState("any:53");
+
   // Remote
-  const [remoteAccess, setRemoteAccess] = useState(false);
-  const [allowWAN, setAllowWAN] = useState(false);
-  const [apiPort, setApiPort] = useState("9090");
-  const [httpsEnabled, setHttpsEnabled] = useState(false);
-  const [apiSecret, setApiSecret] = useState("my-secret-key-2024");
-  const [builtinDashboard, setBuiltinDashboard] = useState(true);
-  const [customDashUrl, setCustomDashUrl] = useState("");
-  // Advanced
-  const [connectUrl, setConnectUrl] = useState("https://www.google.com/generate_204");
-  const [proxyTestUrl, setProxyTestUrl] = useState("https://www.gstatic.com/generate_204");
-  const [testTimeout, setTestTimeout] = useState("5000");
-  const [connTimeout, setConnTimeout] = useState("3000");
-  const [errorPage, setErrorPage] = useState(true);
-  const [sysDNSSupplement, setSysDNSSupplement] = useState(false);
-  const [strictDNS, setStrictDNS] = useState(false);
+  const [externalController, setExternalController] = useState("127.0.0.1:9090");
+  const [secret, setSecret] = useState("");
+
+  // Sync form state when settings load
+  useEffect(() => {
+    if (!settings) return;
+    if (settings["general.mixed_port"] !== undefined) setMixedPort(Number(settings["general.mixed_port"]));
+    if (settings["general.allow_lan"] !== undefined) setAllowLAN(Boolean(settings["general.allow_lan"]));
+    if (settings["general.log_level"] !== undefined) setLogLevel(String(settings["general.log_level"]));
+    if (settings["general.ipv6"] !== undefined) setIpv6(Boolean(settings["general.ipv6"]));
+    if (settings["tun.enable"] !== undefined) setTunEnable(Boolean(settings["tun.enable"]));
+    if (settings["tun.stack"] !== undefined) setTunStack(String(settings["tun.stack"]));
+    if (settings["tun.auto_route"] !== undefined) setTunAutoRoute(Boolean(settings["tun.auto_route"]));
+    if (settings["tun.dns_hijack"] !== undefined) setTunDnsHijack(String(settings["tun.dns_hijack"]));
+    if (settings["mihomo.external_controller"] !== undefined) setExternalController(String(settings["mihomo.external_controller"]));
+    if (settings["mihomo.secret"] !== undefined) setSecret(String(settings["mihomo.secret"]));
+  }, [settings]);
+
+  const handleSave = () => {
+    saveSettings.mutate({
+      "general.mixed_port": mixedPort,
+      "general.allow_lan": allowLAN,
+      "general.log_level": logLevel,
+      "general.ipv6": ipv6,
+      "tun.enable": tunEnable,
+      "tun.stack": tunStack,
+      "tun.auto_route": tunAutoRoute,
+      "tun.dns_hijack": tunDnsHijack,
+      "mihomo.external_controller": externalController,
+      "mihomo.secret": secret,
+    });
+  };
+
+  const handleApplyConfig = async () => {
+    try {
+      const res = await fetch(`${API}/api/config/apply`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to apply");
+      toast.success("Config applied to Mihomo");
+    } catch {
+      toast.error("Failed to apply config");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <Topbar title="Settings" description="Configure Mihomo behavior" />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Settings" description="Configure Mihomo behavior" />
+      <Topbar title="Settings" description="Configure Mihomo behavior">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs"
+          onClick={handleApplyConfig}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Apply Config
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={saveSettings.isPending}
+          className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white"
+        >
+          {saveSettings.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save Settings
+        </Button>
+      </Topbar>
       <div className="flex-1 p-6 overflow-auto space-y-5">
         <Tabs defaultValue="general">
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="tun">TUN</TabsTrigger>
             <TabsTrigger value="remote">Remote</TabsTrigger>
-            <TabsTrigger value="advanced">Advanced</TabsTrigger>
           </TabsList>
 
           {/* General Tab */}
           <TabsContent value="general" className="mt-5 space-y-4">
-            <SectionCard title="Startup">
-              <SettingRow label="Start at Login" description="Launch Mihomo Party when you log in">
-                <Switch checked={startLogin} onCheckedChange={setStartLogin} />
-              </SettingRow>
-              <SettingRow label="Launch Minimized" description="Start in the menu bar without showing the window">
-                <Switch checked={launchMinimized} onCheckedChange={setLaunchMinimized} />
-              </SettingRow>
-            </SectionCard>
-
             <SectionCard title="Network">
-              <SettingRow label="Allow LAN Connections" description="Accept connections from other devices on the network">
+              <SettingRow label="Mixed Port" description="HTTP/SOCKS5 mixed proxy port">
+                <Input
+                  value={mixedPort}
+                  onChange={(e) => setMixedPort(Number(e.target.value))}
+                  type="number"
+                  className="w-24 text-right"
+                />
+              </SettingRow>
+              <SettingRow label="Allow LAN" description="Accept connections from other devices on the network">
                 <Switch checked={allowLAN} onCheckedChange={setAllowLAN} />
               </SettingRow>
-              <SettingRow label="IPv6 DNS Queries" description="Enable IPv6 AAAA record resolution">
-                <Switch checked={ipv6DNS} onCheckedChange={setIpv6DNS} />
-              </SettingRow>
-              <SettingRow label="DNS over HTTPS" description="Encrypt DNS queries via HTTPS">
-                <Switch checked={doh} onCheckedChange={setDoh} />
-              </SettingRow>
-            </SectionCard>
-
-            <SectionCard title="Data">
-              <div className="py-3 border-b border-[var(--border)] space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">GeoIP Database URL</p>
-                <div className="flex gap-2">
-                  <Input value={geoipUrl} onChange={(e) => setGeoipUrl(e.target.value)} className="flex-1" />
-                  <Button variant="outline" size="sm" className="shrink-0 text-xs">Update Now</Button>
-                </div>
-              </div>
-              <div className="py-3 border-b border-[var(--border)] space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">GeoSite Database URL</p>
-                <div className="flex gap-2">
-                  <Input value={geositeUrl} onChange={(e) => setGeositeUrl(e.target.value)} className="flex-1" />
-                  <Button variant="outline" size="sm" className="shrink-0 text-xs">Update Now</Button>
-                </div>
-              </div>
-              <SettingRow label="Auto-update Interval" description="How often to refresh geo databases">
-                <Select value={updateInterval} onValueChange={setUpdateInterval}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="disabled">Disabled</SelectItem>
-                    <SelectItem value="1h">Every 1h</SelectItem>
-                    <SelectItem value="6h">Every 6h</SelectItem>
-                    <SelectItem value="24h">Every 24h</SelectItem>
-                  </SelectContent>
-                </Select>
+              <SettingRow label="IPv6" description="Enable IPv6 support">
+                <Switch checked={ipv6} onCheckedChange={setIpv6} />
               </SettingRow>
             </SectionCard>
 
@@ -142,94 +206,67 @@ export default function SettingsPage() {
             </SectionCard>
           </TabsContent>
 
-          {/* Remote Tab */}
-          <TabsContent value="remote" className="mt-5 space-y-4">
-            <SectionCard title="Proxy Service">
-              <SettingRow label="Remote Access" description="Allow external clients to connect to the proxy">
-                <Switch checked={remoteAccess} onCheckedChange={setRemoteAccess} />
+          {/* TUN Tab */}
+          <TabsContent value="tun" className="mt-5 space-y-4">
+            <SectionCard title="TUN Mode">
+              <SettingRow label="Enable TUN" description="Enable TUN virtual network interface for transparent proxying">
+                <Switch checked={tunEnable} onCheckedChange={setTunEnable} />
               </SettingRow>
-              <SettingRow label="Allow WAN Access" description="Accept connections from the internet (not just LAN)">
-                <Switch checked={allowWAN} onCheckedChange={setAllowWAN} />
+              <SettingRow label="Stack" description="TUN stack implementation">
+                <Select value={tunStack} onValueChange={setTunStack}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="system">System</SelectItem>
+                    <SelectItem value="gvisor">gVisor</SelectItem>
+                    <SelectItem value="lwip">LWIP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+              <SettingRow label="Auto Route" description="Auto-configure routing table for TUN">
+                <Switch checked={tunAutoRoute} onCheckedChange={setTunAutoRoute} />
               </SettingRow>
             </SectionCard>
 
-            <SectionCard title="Controller">
-              <SettingRow label="HTTP API Port" description="Port for the external controller REST API">
-                <Input value={apiPort} onChange={(e) => setApiPort(e.target.value)} className="w-24 text-right" />
-              </SettingRow>
-              <SettingRow label="HTTPS" description="Enable TLS for the controller API">
-                <Switch checked={httpsEnabled} onCheckedChange={setHttpsEnabled} />
-              </SettingRow>
+            <SectionCard title="DNS Hijack">
               <div className="py-3 space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">API Secret</p>
-                <p className="text-xs text-[var(--muted)]">Required for external controller authentication</p>
-                <Input value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} type="password" placeholder="Enter API secret..." />
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Dashboard">
-              <SettingRow label="Built-in Web Dashboard" description="Serve the Yacd/Metacubexd UI from the controller">
-                <Switch checked={builtinDashboard} onCheckedChange={setBuiltinDashboard} />
-              </SettingRow>
-              <div className="py-3 space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">Custom Dashboard URL</p>
-                <p className="text-xs text-[var(--muted)]">Override with an external dashboard URL</p>
+                <p className="text-sm font-medium text-[var(--foreground)]">DNS Hijack Address</p>
+                <p className="text-xs text-[var(--muted)]">Intercept DNS queries at this address (e.g. any:53)</p>
                 <Input
-                  value={customDashUrl}
-                  onChange={(e) => setCustomDashUrl(e.target.value)}
-                  disabled={builtinDashboard}
-                  placeholder="https://board.razord.top"
+                  value={tunDnsHijack}
+                  onChange={(e) => setTunDnsHijack(e.target.value)}
+                  placeholder="any:53"
+                  className="font-mono"
                 />
-              </div>
-              <div className="pt-2">
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open Dashboard
-                </Button>
               </div>
             </SectionCard>
           </TabsContent>
 
-          {/* Advanced Tab */}
-          <TabsContent value="advanced" className="mt-5 space-y-4">
-            <SectionCard title="Connectivity">
+          {/* Remote Tab */}
+          <TabsContent value="remote" className="mt-5 space-y-4">
+            <SectionCard title="Controller">
               <div className="py-3 border-b border-[var(--border)] space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">Connectivity Test URL</p>
-                <Input value={connectUrl} onChange={(e) => setConnectUrl(e.target.value)} />
+                <p className="text-sm font-medium text-[var(--foreground)]">External Controller</p>
+                <p className="text-xs text-[var(--muted)]">Address for the Mihomo REST API (host:port)</p>
+                <Input
+                  value={externalController}
+                  onChange={(e) => setExternalController(e.target.value)}
+                  placeholder="127.0.0.1:9090"
+                  className="font-mono"
+                />
               </div>
-              <div className="py-3 border-b border-[var(--border)] space-y-2">
-                <p className="text-sm font-medium text-[var(--foreground)]">Default Proxy Test URL</p>
-                <Input value={proxyTestUrl} onChange={(e) => setProxyTestUrl(e.target.value)} />
+              <div className="py-3 space-y-2">
+                <p className="text-sm font-medium text-[var(--foreground)]">API Secret</p>
+                <p className="text-xs text-[var(--muted)]">Bearer token for external controller authentication</p>
+                <Input
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  type="password"
+                  placeholder="Leave blank for no authentication"
+                />
               </div>
-              <SettingRow label="Test Timeout (ms)" description="Timeout for proxy latency tests">
-                <Input value={testTimeout} onChange={(e) => setTestTimeout(e.target.value)} type="number" className="w-24 text-right" />
-              </SettingRow>
-              <SettingRow label="Connection Timeout (ms)" description="Timeout for establishing connections">
-                <Input value={connTimeout} onChange={(e) => setConnTimeout(e.target.value)} type="number" className="w-24 text-right" />
-              </SettingRow>
             </SectionCard>
-
-            <SectionCard title="Error Page">
-              <SettingRow label="Show Error Page" description="Display a friendly error page when connection fails">
-                <Switch checked={errorPage} onCheckedChange={setErrorPage} />
-              </SettingRow>
-            </SectionCard>
-
-            <SectionCard title="DNS">
-              <SettingRow label="System DNS Supplement" description="Append system DNS servers to the resolver list">
-                <Switch checked={sysDNSSupplement} onCheckedChange={setSysDNSSupplement} />
-              </SettingRow>
-              <SettingRow label="Strict DNS" description="Reject DNS responses with non-matching IPs">
-                <Switch checked={strictDNS} onCheckedChange={setStrictDNS} />
-              </SettingRow>
-            </SectionCard>
-
-            <div className="flex justify-end">
-              <Button className="gap-2 bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
-                <Save className="h-4 w-4" />
-                Save Changes
-              </Button>
-            </div>
           </TabsContent>
         </Tabs>
       </div>

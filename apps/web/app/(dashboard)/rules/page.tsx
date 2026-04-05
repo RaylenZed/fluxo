@@ -1,8 +1,9 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   Plus, Search, Download, Upload, GripVertical, MoreHorizontal,
   ChevronDown, ChevronRight, LayoutList, FolderOpen, Globe, ExternalLink,
+  ServerCrash,
 } from "lucide-react";
 import {
   DndContext,
@@ -23,7 +24,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Topbar } from "@/components/layout/topbar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -36,6 +36,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import {
+  useRules,
+  useCreateRule,
+  useUpdateRule,
+  useDeleteRule,
+  useReorderRules,
+  useGroups,
+} from "@/lib/hooks";
+import type { RuleRow } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type RuleType =
@@ -45,6 +54,7 @@ type RuleType =
   | "IN-PORT" | "DEST-PORT" | "SRC-PORT" | "SRC-IP"
   | "DEVICE-NAME" | "PROTOCOL" | "SUBNET" | "HOSTNAME-TYPE" | "FINAL";
 
+// UI rule type (adds matches for display)
 interface Rule {
   id: string;
   type: RuleType;
@@ -54,23 +64,6 @@ interface Rule {
   note: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const initialRules: Rule[] = [
-  { id: "1",  type: "DOMAIN-SUFFIX",  value: "openai.com",           policy: "OpenAI",  matches: 847,  note: "" },
-  { id: "2",  type: "DOMAIN-SUFFIX",  value: "anthropic.com",        policy: "Claude",  matches: 312,  note: "" },
-  { id: "3",  type: "GEOIP",          value: "CN",                   policy: "DIRECT",  matches: 2341, note: "China mainland" },
-  { id: "4",  type: "DOMAIN-KEYWORD", value: "google",               policy: "Proxy",   matches: 1205, note: "" },
-  { id: "5",  type: "IP-CIDR",        value: "192.168.0.0/16",       policy: "DIRECT",  matches: 56,   note: "LAN" },
-  { id: "6",  type: "DOMAIN-SUFFIX",  value: "telegram.org",         policy: "Telegram",matches: 423,  note: "" },
-  { id: "7",  type: "PROCESS-NAME",   value: "WeChat",               policy: "DIRECT",  matches: 89,   note: "" },
-  { id: "8",  type: "DOMAIN-SUFFIX",  value: "youtube.com",          policy: "YouTube", matches: 2890, note: "" },
-  { id: "9",  type: "DOMAIN-SUFFIX",  value: "github.com",           policy: "Github",  matches: 677,  note: "" },
-  { id: "10", type: "DOMAIN-SUFFIX",  value: "spotify.com",          policy: "Spotify", matches: 203,  note: "" },
-  { id: "11", type: "DOMAIN-WILDCARD",value: "*.amazon.com",         policy: "Amazon",  matches: 445,  note: "" },
-  { id: "12", type: "GEOSITE",        value: "geolocation-!cn",      policy: "Proxy",   matches: 5678, note: "Non-China" },
-  { id: "13", type: "FINAL",          value: "",                     policy: "Proxy",   matches: 234,  note: "Fallback" },
-];
-
 const RULE_TYPES: RuleType[] = [
   "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-WILDCARD", "DOMAIN-SET",
   "IP-CIDR", "IP-CIDR6", "GEOIP", "GEOSITE", "IP-ASN",
@@ -79,19 +72,26 @@ const RULE_TYPES: RuleType[] = [
   "DEVICE-NAME", "PROTOCOL", "SUBNET", "HOSTNAME-TYPE", "FINAL",
 ];
 
-const POLICIES = ["DIRECT", "REJECT", "Proxy", "OpenAI", "Claude", "Telegram",
-  "YouTube", "Github", "Spotify", "Amazon", "Google", "Twitter",
-  "WeChat", "Speedtest", "PayPal", "Dropbox"];
-
 const BUILTIN_RULE_SETS = [
   "geoip-cn", "geoip-us", "geosite-cn", "geosite-geolocation-!cn",
   "geosite-google", "geosite-youtube", "geosite-telegram",
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+function rowToRule(row: RuleRow): Rule {
+  return {
+    id: row.id,
+    type: row.type as RuleType,
+    value: row.value,
+    policy: row.policy,
+    matches: 0,
+    note: row.note ?? "",
+  };
+}
+
 function getRuleTypeBadgeClass(type: RuleType): string {
   if (type.startsWith("DOMAIN")) return "bg-[var(--brand-100)] text-[var(--brand-700)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]";
-  if (type === "IP-CIDR" || type === "IP-CIDR6" || type === "GEOIP" || type === "GEOSITE" || type === "IP-ASN" || type === "SRC-IP" || type === "SUBNET")
+  if (["IP-CIDR", "IP-CIDR6", "GEOIP", "GEOSITE", "IP-ASN", "SRC-IP", "SUBNET"].includes(type))
     return "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300";
   if (type === "PROCESS-NAME") return "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300";
   if (type === "FINAL") return "bg-[var(--surface-2)] text-[var(--muted)] border border-[var(--border)]";
@@ -128,12 +128,7 @@ function SortableRuleRow({
   };
 
   return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className="group relative"
-    >
-      {/* Drag handle + index */}
+    <tr ref={setNodeRef} style={style} className="group relative">
       <td className="w-12 pl-3 pr-1 py-2.5">
         <div className="flex items-center gap-1.5">
           <button
@@ -146,41 +141,29 @@ function SortableRuleRow({
           <span className="text-xs text-[var(--muted)] font-mono w-5 text-right">{index + 1}</span>
         </div>
       </td>
-
-      {/* Type */}
       <td className="py-2.5 pr-3">
         <span className={cn("inline-flex items-center rounded-[6px] px-2 py-0.5 text-[11px] font-semibold font-mono whitespace-nowrap", getRuleTypeBadgeClass(rule.type))}>
           {rule.type}
         </span>
       </td>
-
-      {/* Value */}
       <td className="py-2.5 pr-3 max-w-[200px]">
         <span className="text-sm font-mono text-[var(--foreground)] truncate block">
           {rule.value || <span className="text-[var(--muted)] italic">—</span>}
         </span>
       </td>
-
-      {/* Policy */}
       <td className="py-2.5 pr-3">
         <span className={cn("inline-flex items-center rounded-[6px] px-2 py-0.5 text-xs font-semibold whitespace-nowrap", getPolicyBadgeClass(rule.policy))}>
           {rule.policy}
         </span>
       </td>
-
-      {/* Matches */}
       <td className="py-2.5 pr-3 text-right">
         <span className="text-xs tabular-nums text-[var(--muted)]">
           {rule.matches.toLocaleString()}
         </span>
       </td>
-
-      {/* Notes */}
       <td className="py-2.5 pr-2 max-w-[140px]">
         <span className="text-xs text-[var(--muted)] truncate block">{rule.note}</span>
       </td>
-
-      {/* Actions */}
       <td className="py-2.5 pr-3 w-10">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -256,12 +239,14 @@ function RuleDialog({
   open,
   onClose,
   editingRule,
+  policies,
   onSave,
 }: {
   open: boolean;
   onClose: () => void;
   editingRule?: Rule;
-  onSave: (rule: Omit<Rule, "id" | "matches">) => void;
+  policies: string[];
+  onSave: (rule: Omit<Rule, "id" | "matches">, notify: boolean, extendedMatch: boolean) => void;
 }) {
   const [type, setType] = useState<RuleType>(editingRule?.type ?? "DOMAIN-SUFFIX");
   const [value, setValue] = useState(editingRule?.value ?? "");
@@ -275,7 +260,7 @@ function RuleDialog({
   const isNoValue = type === "FINAL";
 
   function handleSave() {
-    onSave({ type, value, policy, note });
+    onSave({ type, value, policy, note }, sendNotif, extendedMatch);
     onClose();
   }
 
@@ -288,13 +273,10 @@ function RuleDialog({
         </DialogHeader>
 
         <div className="px-6 pb-2 space-y-4">
-          {/* Type */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Rule Type</label>
             <Select value={type} onValueChange={(v) => setType(v as RuleType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {RULE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -303,7 +285,6 @@ function RuleDialog({
             </Select>
           </div>
 
-          {/* Value */}
           {!isNoValue && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--muted)]">Value</label>
@@ -321,22 +302,18 @@ function RuleDialog({
             </div>
           )}
 
-          {/* Policy */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Policy</label>
             <Select value={policy} onValueChange={setPolicy}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {POLICIES.map((p) => (
+                {policies.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Note */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Notes (optional)</label>
             <Input
@@ -346,7 +323,6 @@ function RuleDialog({
             />
           </div>
 
-          {/* Options */}
           <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] divide-y divide-[var(--border)]">
             <label className="flex items-center justify-between px-3 py-2.5 cursor-pointer">
               <span className="text-sm text-[var(--foreground)]">Send Notification</span>
@@ -377,7 +353,15 @@ function RuleDialog({
 }
 
 // ─── Rule Set Dialog ───────────────────────────────────────────────────────────
-function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function RuleSetDialog({
+  open,
+  onClose,
+  policies,
+}: {
+  open: boolean;
+  onClose: () => void;
+  policies: string[];
+}) {
   const [name, setName] = useState("");
   const [sourceType, setSourceType] = useState<"builtin" | "external">("builtin");
   const [builtinSet, setBuiltinSet] = useState(BUILTIN_RULE_SETS[0]);
@@ -400,13 +384,11 @@ function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }
         </DialogHeader>
 
         <div className="px-6 pb-2 space-y-4">
-          {/* Name */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. my-cn-rules" />
           </div>
 
-          {/* Source type toggle */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Source</label>
             <div className="flex gap-1.5 rounded-[10px] bg-[var(--surface-2)] p-0.5 border border-[var(--border)]">
@@ -427,14 +409,11 @@ function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }
             </div>
           </div>
 
-          {/* Built-in select */}
           {sourceType === "builtin" && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--muted)]">Built-in Set</label>
               <Select value={builtinSet} onValueChange={setBuiltinSet}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {BUILTIN_RULE_SETS.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -444,7 +423,6 @@ function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }
             </div>
           )}
 
-          {/* External URL */}
           {sourceType === "external" && (
             <>
               <div className="space-y-1.5">
@@ -479,15 +457,12 @@ function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }
             </>
           )}
 
-          {/* Policy */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[var(--muted)]">Policy</label>
             <Select value={policy} onValueChange={setPolicy}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {POLICIES.map((p) => (
+                {policies.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>
@@ -506,21 +481,48 @@ function RuleSetDialog({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
+// ─── Loading skeleton rows ────────────────────────────────────────────────────
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <tr key={i}>
+          <td colSpan={7} className="py-2.5 px-3">
+            <div className="h-5 rounded-[6px] animate-pulse bg-[var(--surface-2)]" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function RulesPage() {
-  const [rules, setRules] = useState<Rule[]>(initialRules);
   const [search, setSearch] = useState("");
   const [groupByPolicy, setGroupByPolicy] = useState(false);
   const [showAddRule, setShowAddRule] = useState(false);
   const [showAddRuleSet, setShowAddRuleSet] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | undefined>();
 
+  const rulesQuery = useRules();
+  const groupsQuery = useGroups();
+  const createRule = useCreateRule();
+  const updateRule = useUpdateRule();
+  const deleteRule = useDeleteRule();
+  const reorderRules = useReorderRules();
+
+  const rawRules: Rule[] = (rulesQuery.data ?? []).map(rowToRule);
+
+  // Build policies from groups + builtins
+  const groupNames = (groupsQuery.data ?? []).map((g) => g.name);
+  const policies = ["DIRECT", "REJECT", ...groupNames];
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const filtered = rules.filter((r) => {
+  const filtered = rawRules.filter((r) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -534,29 +536,44 @@ export default function RulesPage() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      setRules((prev) => {
-        const oldIdx = prev.findIndex((r) => r.id === active.id);
-        const newIdx = prev.findIndex((r) => r.id === over.id);
-        return arrayMove(prev, oldIdx, newIdx);
-      });
+      const oldIdx = rawRules.findIndex((r) => r.id === active.id);
+      const newIdx = rawRules.findIndex((r) => r.id === over.id);
+      const reordered = arrayMove(rawRules, oldIdx, newIdx);
+      reorderRules.mutate(reordered.map((r) => r.id));
     }
   }
 
   function handleDelete(id: string) {
-    setRules((prev) => prev.filter((r) => r.id !== id));
+    deleteRule.mutate(id);
   }
 
-  function handleSaveRule(data: Omit<Rule, "id" | "matches">) {
+  function handleSaveRule(
+    data: Omit<Rule, "id" | "matches">,
+    notify: boolean,
+    extendedMatch: boolean
+  ) {
     if (editingRule) {
-      setRules((prev) => prev.map((r) => r.id === editingRule.id ? { ...r, ...data } : r));
+      updateRule.mutate({
+        id: editingRule.id,
+        data: {
+          type: data.type,
+          value: data.value,
+          policy: data.policy,
+          note: data.note,
+          notify: notify ? 1 : 0,
+          extended_matching: extendedMatch ? 1 : 0,
+        },
+      });
       setEditingRule(undefined);
     } else {
-      const newRule: Rule = {
-        id: String(Date.now()),
-        matches: 0,
-        ...data,
-      };
-      setRules((prev) => [newRule, ...prev]);
+      createRule.mutate({
+        type: data.type,
+        value: data.value,
+        policy: data.policy,
+        note: data.note,
+        notify: notify ? 1 : 0,
+        extended_matching: extendedMatch ? 1 : 0,
+      });
     }
   }
 
@@ -567,9 +584,12 @@ export default function RulesPage() {
     return acc;
   }, {});
 
+  const isLoading = rulesQuery.isLoading;
+  const isError = rulesQuery.isError;
+
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Rules" description={`${rules.length} rules configured`}>
+      <Topbar title="Rules" description={`${rulesQuery.data?.length ?? 0} rules configured`}>
         <Button variant="ghost" size="sm" className="gap-1.5 text-[var(--muted)]">
           <Upload className="h-3.5 w-3.5" />
           Import
@@ -589,99 +609,108 @@ export default function RulesPage() {
       </Topbar>
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Filter bar */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted)]" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search rules…"
-              className="pl-8 h-8 text-xs"
-            />
+        {isError ? (
+          <div className="flex flex-col items-center justify-center py-16 text-[var(--muted)]">
+            <ServerCrash className="h-10 w-10 mb-3 opacity-40" />
+            <p className="text-sm font-medium">Cannot reach API server</p>
+            <p className="text-xs mt-1">Make sure the backend is running on port 8090</p>
           </div>
+        ) : (
+          <>
+            {/* Filter bar */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted)]" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search rules…"
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
 
-          {/* Group toggle */}
-          <button
-            onClick={() => setGroupByPolicy(!groupByPolicy)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-[8px] px-3 h-8 text-xs font-semibold border transition-all",
-              groupByPolicy
-                ? "bg-[var(--brand-500)] text-white border-[var(--brand-500)]"
-                : "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)] hover:text-[var(--foreground)]"
-            )}
-          >
-            {groupByPolicy ? <FolderOpen className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
-            {groupByPolicy ? "By Policy" : "Flat List"}
-          </button>
+              <button
+                onClick={() => setGroupByPolicy(!groupByPolicy)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-[8px] px-3 h-8 text-xs font-semibold border transition-all",
+                  groupByPolicy
+                    ? "bg-[var(--brand-500)] text-white border-[var(--brand-500)]"
+                    : "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)] hover:text-[var(--foreground)]"
+                )}
+              >
+                {groupByPolicy ? <FolderOpen className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
+                {groupByPolicy ? "By Policy" : "Flat List"}
+              </button>
 
-          <span className="text-xs text-[var(--muted)] ml-auto">
-            {filtered.length} / {rules.length} rules
-          </span>
-        </div>
+              <span className="text-xs text-[var(--muted)] ml-auto">
+                {filtered.length} / {rawRules.length} rules
+              </span>
+            </div>
 
-        {/* Table */}
-        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <table className="w-full text-sm">
-              {/* Sticky header */}
-              <thead className="sticky top-0 z-10 bg-[var(--surface-2)] border-b border-[var(--border)]">
-                <tr>
-                  <th className="pl-3 pr-1 py-2.5 w-12" />
-                  <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Type</th>
-                  <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Value</th>
-                  <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Policy</th>
-                  <th className="py-2.5 pr-3 text-right text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Matches</th>
-                  <th className="py-2.5 pr-2 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Notes</th>
-                  <th className="py-2.5 pr-3 w-10" />
-                </tr>
-              </thead>
-
-              <SortableContext items={filtered.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {groupByPolicy ? (
-                    Object.entries(grouped).map(([policy, groupRules]) => {
-                      // Calculate start index in filtered list
-                      const startIdx = filtered.indexOf(groupRules[0]);
-                      return (
-                        <PolicyGroup
-                          key={policy}
-                          policy={policy}
-                          rules={groupRules}
-                          onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
-                          onDelete={handleDelete}
-                          startIndex={startIdx}
-                        />
-                      );
-                    })
-                  ) : (
-                    filtered.map((rule, i) => (
-                      <SortableRuleRow
-                        key={rule.id}
-                        rule={rule}
-                        index={i}
-                        onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
-                        onDelete={handleDelete}
-                      />
-                    ))
-                  )}
-
-                  {filtered.length === 0 && (
+            {/* Table */}
+            <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-[var(--surface-2)] border-b border-[var(--border)]">
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-sm text-[var(--muted)]">
-                        No rules match your search
-                      </td>
+                      <th className="pl-3 pr-1 py-2.5 w-12" />
+                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Type</th>
+                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Value</th>
+                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Policy</th>
+                      <th className="py-2.5 pr-3 text-right text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Matches</th>
+                      <th className="py-2.5 pr-2 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Notes</th>
+                      <th className="py-2.5 pr-3 w-10" />
                     </tr>
-                  )}
-                </tbody>
-              </SortableContext>
-            </table>
-          </DndContext>
-        </div>
+                  </thead>
+
+                  <SortableContext items={filtered.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {isLoading ? (
+                        <SkeletonRows />
+                      ) : groupByPolicy ? (
+                        Object.entries(grouped).map(([policy, groupRules]) => {
+                          const startIdx = filtered.indexOf(groupRules[0]);
+                          return (
+                            <PolicyGroup
+                              key={policy}
+                              policy={policy}
+                              rules={groupRules}
+                              onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
+                              onDelete={handleDelete}
+                              startIndex={startIdx}
+                            />
+                          );
+                        })
+                      ) : (
+                        filtered.map((rule, i) => (
+                          <SortableRuleRow
+                            key={rule.id}
+                            rule={rule}
+                            index={i}
+                            onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
+                            onDelete={handleDelete}
+                          />
+                        ))
+                      )}
+
+                      {!isLoading && filtered.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-sm text-[var(--muted)]">
+                            No rules match your search
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </SortableContext>
+                </table>
+              </DndContext>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Dialogs */}
@@ -689,9 +718,14 @@ export default function RulesPage() {
         open={showAddRule}
         onClose={() => { setShowAddRule(false); setEditingRule(undefined); }}
         editingRule={editingRule}
+        policies={policies}
         onSave={handleSaveRule}
       />
-      <RuleSetDialog open={showAddRuleSet} onClose={() => setShowAddRuleSet(false)} />
+      <RuleSetDialog
+        open={showAddRuleSet}
+        onClose={() => setShowAddRuleSet(false)}
+        policies={policies}
+      />
     </div>
   );
 }

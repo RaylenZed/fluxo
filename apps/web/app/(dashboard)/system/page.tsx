@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Play, Square, RotateCw, RefreshCw, Download, UploadCloud,
   Tag, Terminal, Trash2, Network, Shield, Bug, Globe,
@@ -22,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
 import { cn } from "@/lib/utils";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -243,7 +247,29 @@ function CoreStatusCard() {
   const [showRestart, setShowRestart] = useState(false);
   const [showInstallVersion, setShowInstallVersion] = useState(false);
 
-  const isRunning = status === "running";
+  const { data: mihomoStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ["mihomo", "status"],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/mihomo/status`);
+      if (!res.ok) return { running: false, version: null };
+      return res.json() as Promise<{ running: boolean; version: string | null }>;
+    },
+    refetchInterval: 10_000,
+    retry: false,
+  });
+
+  const applyConfig = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API}/api/config/apply`, { method: "POST" });
+      if (!res.ok) throw new Error("Apply failed");
+      return res.json();
+    },
+    onSuccess: () => toast.success("Config reloaded"),
+    onError: () => toast.error("Failed to reload config"),
+  });
+
+  const isRunning = mihomoStatus?.running ?? status === "running";
+  const version = mihomoStatus?.version ?? "Unknown";
 
   return (
     <Card>
@@ -270,7 +296,7 @@ function CoreStatusCard() {
                 </Badge>
               </div>
               <p className="text-xs text-[var(--muted)] mt-0.5">
-                v1.19.10 · linux/amd64 · PID 12847
+                {statusLoading ? "Loading…" : `${version} · linux/amd64`}
               </p>
             </div>
           </div>
@@ -320,8 +346,15 @@ function CoreStatusCard() {
           >
             <RotateCw className="h-3.5 w-3.5" /> Restart
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" /> Reload Config
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => applyConfig.mutate()}
+            disabled={applyConfig.isPending}
+          >
+            <RefreshCw className={`h-3.5 w-3.5${applyConfig.isPending ? " animate-spin" : ""}`} />
+            {applyConfig.isPending ? "Reloading…" : "Reload Config"}
           </Button>
         </div>
 
@@ -463,6 +496,23 @@ function TunConfigCard() {
   const [dnsHijack, setDnsHijack]               = useState("any:53");
   const [showFixRoutes, setShowFixRoutes]        = useState(false);
 
+  const setTun = useMutation({
+    mutationFn: async (enable: boolean) => {
+      const res = await fetch(`${API}/api/mihomo/tun`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enable }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (_data, enable) => {
+      setTunEnabled(enable);
+      toast.success("TUN setting saved (apply config to activate)");
+    },
+    onError: () => toast.error("Failed to update TUN"),
+  });
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -484,7 +534,11 @@ function TunConfigCard() {
             <p className="text-sm font-semibold">TUN Mode</p>
             <p className="text-xs text-[var(--muted)] mt-0.5">Capture all TCP/UDP via virtual NIC</p>
           </div>
-          <Switch checked={tunEnabled} onCheckedChange={setTunEnabled} />
+          <Switch
+            checked={tunEnabled}
+            onCheckedChange={(v) => setTun.mutate(v)}
+            disabled={setTun.isPending}
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
