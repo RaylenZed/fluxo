@@ -1,12 +1,19 @@
-# Mihomo Party — Web 版 Surge 控制面板 for Mihomo
+# Mihomo Party — 现代化 Mihomo Web 管理面板
 
 ## Context
 
 在无界面的 Linux VPS 上管理 Mihomo (Clash.Meta) 代理，目前缺乏一个将"可视化配置生成"与"面板实时监控"合二为一的现代化 Web 工具。现有的 Metacubexd 只是个"遥控器"，无法添加节点、编辑策略组或管理规则。
 
-**目标**: 开发一个像素级复刻 Surge (macOS/iOS) 设计感和交互体验的 Web 控制面板，同时整合 mihomo-manager 脚本的所有系统管理功能，最终 Docker 一键部署。
+**目标**: 开发一个现代化 Web 控制面板，功能对标 Surge (macOS/iOS)，但拥有自己独特的设计语言。整合 mihomo-manager 脚本的所有系统管理功能，支持 Docker 和宿主机直装两种部署方式。
 
-**设计感**: 参考 Surge macOS 原生界面 + 紫色调现代 Dashboard 风格（圆角卡片、柔和阴影、毛玻璃侧边栏、Apple 拟物质感）。
+**设计语言**: 不照搬 Surge 的 macOS 原生风格，而是打造独立的现代 Web 美学 —— 参考 Coursue Dashboard 的设计风格：
+- **紫色主题色** (#7C5CFC) 为主色调，配合柔和渐变
+- **三栏布局**: 白色左侧导航栏 + 灰蓝背景主内容区 + 可选右侧信息面板
+- **圆角卡片** (16px radius)，超柔阴影 (0 4px 24px rgba(0,0,0,0.06))
+- **分类导航**: 侧边栏按 OVERVIEW / PROXY / HTTP / SYSTEM 等分类，带图标
+- **信息密度适中**: 大量留白，重要数据用大号加粗字体突出
+- **深色/浅色模式**: 双主题支持
+- 与 Surge 的关键区别: Surge 是 macOS 原生拟物风格，我们是 **现代 Web SaaS 风格**
 
 ---
 
@@ -290,18 +297,118 @@ mihomo-party/
 
 ---
 
-### P5 — Phase 6: 容器化 + 打包
+### P5 — Phase 6: 部署与打包
 
-#### 6.1 Docker 镜像
-- 多阶段构建: Node.js 22 Alpine
+#### 部署架构 (核心原则: Mihomo 必须在宿主机上)
+
+> **为什么不能全部 Docker 化?**
+> Mihomo 的 TUN 模式需要创建虚拟网卡并接管宿主机的全部网络流量（让 VPS 本身能翻墙分流）。
+> 如果 Mihomo 运行在 Docker 容器中，TUN 只能接管容器内部网络，宿主机的 curl、wget、其他 Docker 容器等都无法走代理。
+> 因此 Mihomo **必须直接安装在宿主机上**。
+
+```
+VPS 宿主机
+├── Mihomo (直接安装在宿主机)          ← 接管宿主机全部流量 (TUN 模式)
+│   ├── /usr/local/bin/mihomo          ← 二进制文件
+│   ├── /etc/mihomo/config.yaml        ← 由 Web 后端动态生成
+│   ├── /etc/mihomo/*.mmdb, *.dat      ← GeoIP 数据库
+│   └── systemd: mihomo.service        ← 系统服务
+│
+├── mihomo-party-web (两种部署方式任选)
+│   │
+│   ├── 方式 A: Docker 容器 (推荐，干净隔离)
+│   │   ├── 挂载 /etc/mihomo/          ← 读写宿主机配置目录
+│   │   ├── 挂载 /var/run/dbus/        ← 通过 D-Bus 控制 systemd 服务
+│   │   ├── 连接 Mihomo REST API       ← http://host.docker.internal:9090
+│   │   └── 端口映射 8080:3000         ← Web UI 访问
+│   │
+│   └── 方式 B: 直接运行在宿主机 (最简单)
+│       ├── Node.js 进程 (PM2 管理)
+│       ├── 直接读写 /etc/mihomo/
+│       ├── 直接调用 systemctl
+│       └── 监听端口 3000
+│
+└── 用户浏览器 → http://<VPS_IP>:8080  ← 访问 Web UI 管理一切
+```
+
+#### 6.1 方式 A: Docker 部署 Web 面板 (推荐)
+- 多阶段构建 Dockerfile: Node.js 22 Alpine
 - 前端 SSR + 后端 API 统一服务
-- 内置 Mihomo 二进制 (可选下载)
+- docker-compose.yml:
+  ```yaml
+  services:
+    mihomo-party:
+      image: mihomo-party:latest
+      ports:
+        - "8080:3000"
+      volumes:
+        - /etc/mihomo:/etc/mihomo          # 宿主机 Mihomo 配置
+        - /var/run/dbus:/var/run/dbus      # D-Bus (控制 systemctl)
+        - mihomo-party-data:/data          # SQLite 数据
+      environment:
+        - MIHOMO_API=http://host.docker.internal:9090
+        - MIHOMO_SECRET=your-secret
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+  ```
+- Docker 管理命令:
+  - 安装: `docker compose up -d`
+  - 更新: `docker compose pull && docker compose up -d`
+  - 卸载: `docker compose down -v` (加 -v 删除数据卷)
+  - 查看日志: `docker compose logs -f`
 
-#### 6.2 Docker Compose
-- 服务: mihomo-party (前端+后端), mihomo (代理内核)
-- Mihomo 容器: cap_add: [NET_ADMIN], devices: [/dev/net/tun]
-- 端口映射: Web UI (8080), Mihomo API (9090)
-- 数据卷: /etc/mihomo (配置), /data (SQLite)
+#### 6.2 方式 B: 宿主机直装 (一键脚本)
+- 安装脚本: `curl -fsSL https://raw.githubusercontent.com/RaylenZed/mihomo-party/main/install.sh | bash`
+- 安装流程:
+  1. 检测系统环境 (Debian/Ubuntu/CentOS/Alpine)
+  2. 安装 Node.js 22 LTS (如果未安装)
+  3. 从 GitHub Releases 下载最新 mihomo-party 打包文件
+  4. 解压到 `/opt/mihomo-party/`
+  5. 创建 systemd service: `/etc/systemd/system/mihomo-party.service`
+  6. 启动服务并设置开机自启
+  7. 自动检测并对接已有的 Mihomo 安装
+- 管理命令:
+  - 启动: `systemctl start mihomo-party`
+  - 停止: `systemctl stop mihomo-party`
+  - 重启: `systemctl restart mihomo-party`
+  - 状态: `systemctl status mihomo-party`
+  - 查看日志: `journalctl -u mihomo-party -f`
+- 更新: `mihomo-party update` 或重新运行安装脚本
+- **完整卸载**: `mihomo-party uninstall` 或 `curl -fsSL .../install.sh | bash -s -- --uninstall`
+  - 停止并删除 mihomo-party 服务
+  - 删除 /opt/mihomo-party/ 目录
+  - 可选: 是否同时卸载 Mihomo 及其配置 (/etc/mihomo/)
+  - 可选: 是否删除 SQLite 数据库
+  - 可选: 是否卸载 Node.js
+
+#### 6.3 Mihomo 安装与生命周期管理 (Web 面板负责)
+- 首次访问 Web UI 时引导安装向导:
+  1. 检测是否已安装 Mihomo → 如有则自动对接
+  2. 如未安装 → 引导一键安装 (自动检测架构 amd64/arm64/armv7)
+  3. 配置基础参数 (端口/密钥/TUN 模式)
+  4. 导入初始配置或订阅
+- 从 GitHub releases 下载最新版
+- 创建 systemd service + TUN 路由修复脚本
+- 复用 mihomo-manager.sh 的安装逻辑
+
+#### 6.4 完整服务管理 (Web UI 内)
+通过 Web 界面可管理所有服务的完整生命周期:
+
+| 服务 | 操作 |
+|------|------|
+| **Mihomo 内核** | 安装 / 启动 / 停止 / 重启 / 更新 / 开机自启 / 卸载 |
+| **mihomo-party Web 面板** | 更新检查 / 在线更新 / 查看版本 |
+| **Tailscale** | 安装 / 连接 / 断开 / 重启 / 卸载 / 查看状态 |
+| **GeoIP 数据库** | 更新 / 自动更新开关 / 查看版本 |
+| **TUN 路由** | 启用 / 禁用 / 修复 / 状态检测 |
+
+#### 6.5 完整卸载支持
+Web UI 设置页面提供"系统维护"区域:
+- **卸载 Mihomo**: 停止服务 → 删除二进制 → 删除 systemd 服务 → 可选删除配置
+- **卸载 Tailscale**: 断开连接 → 清理 Mihomo 兼容配置 → 卸载
+- **卸载 mihomo-party**: 提供命令提示，引导用户在终端执行 (Web 面板无法自己删除自己)
+- **重置所有配置**: 清空数据库 + 重置为默认 config.yaml
+- **导出配置备份**: 打包所有配置/数据库/YAML 为 tar.gz 下载
 
 ---
 
