@@ -68,8 +68,8 @@ export default function ProvidersPage() {
       if (!res.ok) throw new Error("Failed to create");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider added"); },
-    onError: () => toast.error("Failed to add provider"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerAdded); },
+    onError: () => toast.error(t.providers.providerAddFailed),
   });
 
   const updateMutation = useMutation({
@@ -82,8 +82,8 @@ export default function ProvidersPage() {
       if (!res.ok) throw new Error("Failed to update");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider updated"); },
-    onError: () => toast.error("Failed to update provider"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerUpdated); },
+    onError: () => toast.error(t.providers.providerUpdateFailed),
   });
 
   const deleteMutation = useMutation({
@@ -92,8 +92,8 @@ export default function ProvidersPage() {
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success("Provider deleted"); },
-    onError: () => toast.error("Failed to delete provider"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerDeleted); },
+    onError: () => toast.error(t.providers.providerDeleteFailed),
   });
 
   const openNew = () => {
@@ -135,9 +135,9 @@ export default function ProvidersPage() {
     try {
       const res = await fetch(`${API}/api/mihomo/providers/${encodeURIComponent(p.name)}/update`, { method: "PUT" });
       if (!res.ok) throw new Error();
-      toast.success(`Provider "${p.name}" updated`);
+      toast.success(t.providers.updateNowSuccess);
     } catch {
-      toast.error("Failed to update provider — Mihomo may not be running");
+      toast.error(t.providers.updateNowFailed);
     }
   };
 
@@ -146,7 +146,7 @@ export default function ProvidersPage() {
       <Topbar title={t.providers.title} description={t.providers.subtitle}>
         <Button onClick={openNew} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
           <Plus className="h-3.5 w-3.5" />
-          Add Provider
+          {t.providers.addProvider}
         </Button>
       </Topbar>
 
@@ -161,12 +161,12 @@ export default function ProvidersPage() {
               <Package className="h-7 w-7 text-[var(--muted)]" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-semibold text-[var(--foreground)]">No providers yet</p>
-              <p className="text-xs text-[var(--muted)] mt-1">Add a subscription URL to import proxy nodes.</p>
+              <p className="text-sm font-semibold text-[var(--foreground)]">{t.providers.noProviders}</p>
+              <p className="text-xs text-[var(--muted)] mt-1">{t.providers.noProvidersDesc}</p>
             </div>
             <Button onClick={openNew} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
               <Plus className="h-3.5 w-3.5" />
-              Add Provider
+              {t.providers.addProvider}
             </Button>
           </div>
         ) : (
@@ -180,9 +180,9 @@ export default function ProvidersPage() {
                   <p className="text-sm font-semibold text-[var(--foreground)]">{p.name}</p>
                   <p className="text-xs font-mono text-[var(--muted)] truncate">{p.url}</p>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
-                    <span>Interval: {formatInterval(p.interval)}</span>
-                    {p.filter && <span>Filter: <code className="font-mono">{p.filter}</code></span>}
-                    {p.last_updated && <span>Updated: {new Date(p.last_updated).toLocaleDateString()}</span>}
+                    <span>{t.providers.interval}: {formatInterval(p.interval)}</span>
+                    {p.filter && <span>{t.providers.filterLabel}: <code className="font-mono">{p.filter}</code></span>}
+                    {p.last_updated && <span>{t.providers.lastUpdated}: {new Date(p.last_updated).toLocaleDateString()}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -193,7 +193,7 @@ export default function ProvidersPage() {
                     onClick={() => handleUpdateNow(p)}
                   >
                     <RefreshCw className="h-3 w-3" />
-                    Update
+                    {t.providers.update}
                   </Button>
                   <Button
                     variant="ghost"
@@ -222,42 +222,42 @@ export default function ProvidersPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Provider" : "Add Provider"}</DialogTitle>
+            <DialogTitle>{editingId ? t.providers.editProvider : t.providers.addProvider}</DialogTitle>
           </DialogHeader>
           <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Name</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{t.providers.name}</label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="My Subscription" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Subscription URL</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{t.profiles.subscriptionUrlLabel}</label>
               <Input value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://sub.example.com/..." className="font-mono text-xs" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Auto-update Interval (seconds)</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{t.providers.interval}</label>
               <Select value={form.interval} onValueChange={(v) => setForm((f) => ({ ...f, interval: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="3600">Every 1 hour</SelectItem>
-                  <SelectItem value="21600">Every 6 hours</SelectItem>
-                  <SelectItem value="86400">Every 24 hours</SelectItem>
-                  <SelectItem value="604800">Every 7 days</SelectItem>
+                  <SelectItem value="3600">{t.profiles.interval1h}</SelectItem>
+                  <SelectItem value="21600">{t.profiles.interval6h}</SelectItem>
+                  <SelectItem value="86400">{t.profiles.interval24h}</SelectItem>
+                  <SelectItem value="604800">{t.profiles.interval7d}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Filter Regex <span className="text-[var(--muted)] font-normal">(optional)</span></label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{t.providers.filterLabel}</label>
               <Input value={form.filter} onChange={(e) => setForm((f) => ({ ...f, filter: e.target.value }))} placeholder="HK|JP|SG" className="font-mono" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Health Check URL <span className="text-[var(--muted)] font-normal">(optional)</span></label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{t.providers.healthCheckUrl}</label>
               <Input value={form.healthCheckUrl} onChange={(e) => setForm((f) => ({ ...f, healthCheckUrl: e.target.value }))} placeholder="https://www.gstatic.com/generate_204" className="font-mono text-xs" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>{t.providers.cancel}</Button>
             <Button onClick={handleSubmit} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
-              {editingId ? "Save" : "Add"}
+              {editingId ? t.providers.save : t.common.add}
             </Button>
           </DialogFooter>
         </DialogContent>

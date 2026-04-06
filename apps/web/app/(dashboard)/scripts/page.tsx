@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Topbar } from "@/components/layout/topbar";
+import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -19,63 +20,63 @@ interface Task {
   icon: React.ElementType;
 }
 
-const initialTasks: Task[] = [
-  {
-    id: "1",
-    name: "Auto-update Proxy Providers",
-    description: "Fetch latest proxies from all subscription URLs",
-    schedule: "Every 24 hours (0 */24 * * *)",
-    lastRun: null,
-    enabled: false,
-    icon: RefreshCw,
-  },
-  {
-    id: "2",
-    name: "GeoIP Database Update",
-    description: "Download updated GeoIP database from the configured URL",
-    schedule: "Every 7 days (0 0 */7 * *)",
-    lastRun: null,
-    enabled: false,
-    icon: Database,
-  },
-  {
-    id: "3",
-    name: "Config Backup",
-    description: "Backup current Mihomo configuration files to a local directory",
-    schedule: "Every day at midnight (0 0 * * *)",
-    lastRun: null,
-    enabled: false,
-    icon: Shield,
-  },
-];
-
 export default function TasksPage() {
+  const { t } = useLocale();
+  const tT = t.tasks;
+
+  const initialTasks: Task[] = [
+    {
+      id: "1",
+      name: tT.task1Name,
+      description: tT.task1Desc,
+      schedule: tT.task1Schedule,
+      lastRun: null,
+      enabled: false,
+      icon: RefreshCw,
+    },
+    {
+      id: "2",
+      name: tT.task2Name,
+      description: tT.task2Desc,
+      schedule: tT.task2Schedule,
+      lastRun: null,
+      enabled: false,
+      icon: Database,
+    },
+    {
+      id: "3",
+      name: tT.task3Name,
+      description: tT.task3Desc,
+      schedule: tT.task3Schedule,
+      lastRun: null,
+      enabled: false,
+      icon: Shield,
+    },
+  ];
+
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
 
   const toggleTask = (id: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)));
+    setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, enabled: !task.enabled } : task)));
   };
 
   const handleRunNow = (task: Task) => {
-    toast.info(`Running "${task.name}"...`, {
-      description: "Connect to a system management API to execute scheduled tasks.",
+    toast.info(`${tT.runNow}: "${task.name}"`, {
+      description: tT.scheduledTasksDesc,
     });
   };
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Tasks" description="Suggested scheduled maintenance tasks" />
+      <Topbar title={tT.title} description={tT.subtitle} />
 
       <div className="flex-1 p-6 overflow-auto space-y-4">
         {/* Info banner */}
         <div className="flex items-start gap-3 rounded-[12px] bg-[var(--surface-2)] border border-[var(--border)] px-4 py-3">
           <CalendarClock className="h-4 w-4 text-[var(--brand-500)] mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-[var(--foreground)]">Scheduled Tasks</p>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              These are suggested system-level maintenance tasks for Mihomo. You can enable them via your OS scheduler
-              (cron, systemd timers, launchd plist). Click "Run Now" to test connectivity.
-            </p>
+            <p className="text-sm font-semibold text-[var(--foreground)]">{tT.scheduledTasks}</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">{tT.scheduledTasksDesc}</p>
           </div>
         </div>
 
@@ -94,7 +95,7 @@ export default function TasksPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-semibold text-[var(--foreground)]">{task.name}</h3>
                     <Badge variant={task.enabled ? "success" : "secondary"}>
-                      {task.enabled ? "Enabled" : "Disabled"}
+                      {task.enabled ? tT.enabled : tT.disabled}
                     </Badge>
                   </div>
                   <p className="text-xs text-[var(--muted)]">{task.description}</p>
@@ -102,7 +103,7 @@ export default function TasksPage() {
                     <span className="font-mono bg-[var(--surface-2)] px-2 py-0.5 rounded-[6px] border border-[var(--border)]">
                       {task.schedule}
                     </span>
-                    <span>Last run: {task.lastRun ?? "Never"}</span>
+                    <span>{tT.lastRun}: {task.lastRun ?? tT.never}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -113,7 +114,7 @@ export default function TasksPage() {
                     onClick={() => handleRunNow(task)}
                   >
                     <Play className="h-3 w-3" />
-                    Run Now
+                    {tT.runNow}
                   </Button>
                   <Switch checked={task.enabled} onCheckedChange={() => toggleTask(task.id)} />
                 </div>
@@ -125,7 +126,7 @@ export default function TasksPage() {
         {/* Setup instructions */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">How to Set Up Automated Tasks</CardTitle>
+            <CardTitle className="text-sm font-semibold">{tT.howToSetup}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">

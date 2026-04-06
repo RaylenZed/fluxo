@@ -87,10 +87,10 @@ function GroupCard({
   const { t } = useLocale();
 
   const groupTypeLabels = {
-    select: "Select",
-    "url-test": "Auto",
-    fallback: "Fallback",
-    "load-balance": "Load Bal.",
+    select: t.policies.typeSelect,
+    "url-test": t.policies.typeAuto,
+    fallback: t.policies.typeFallback,
+    "load-balance": t.policies.typeLoadBalance,
   } as const;
 
   const groupType = group.type as keyof typeof groupTypeIcons;
@@ -165,7 +165,7 @@ function GroupCard({
           <NodeCard
             node={{ name: "DIRECT", type: "builtin", latency: 0 }}
             selected={selectedProxy === "DIRECT"}
-            onClick={() => toast.info("Select node — coming soon")}
+            onClick={() => toast.info(t.policies.selectComingSoon)}
           />
           {proxyNodes.map((node) => {
             let latency = 0;
@@ -180,7 +180,7 @@ function GroupCard({
                 key={node.id}
                 node={{ name: node.name, type: node.type, latency }}
                 selected={selectedProxy === node.name}
-                onClick={() => toast.info("Select node — coming soon")}
+                onClick={() => toast.info(t.policies.selectComingSoon)}
               />
             );
           })}

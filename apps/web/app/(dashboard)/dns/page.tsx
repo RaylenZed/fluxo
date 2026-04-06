@@ -104,9 +104,9 @@ export default function DNSPage() {
   }
 
   const modeOptions = [
-    { value: "fake-ip", label: "Fake IP", desc: "Use fake IPs to improve performance" },
-    { value: "redir-host", label: "Redir Host", desc: "Redirect-based DNS resolution" },
-    { value: "normal", label: "Normal", desc: "Standard DNS resolution" },
+    { value: "fake-ip", label: t.dns.fakeIpLabel, desc: t.dns.fakeIpDesc },
+    { value: "redir-host", label: t.dns.redirHostLabel, desc: t.dns.redirHostDesc },
+    { value: "normal", label: t.dns.normalLabel, desc: t.dns.normalDesc },
   ];
 
   return (
@@ -119,7 +119,7 @@ export default function DNSPage() {
           className="gap-2 bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white text-xs"
         >
           {saveDns.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save
+          {t.dns.saveBtn}
         </Button>
       </Topbar>
 
@@ -129,8 +129,8 @@ export default function DNSPage() {
           <CardContent className="pt-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-[var(--foreground)]">Enable DNS</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">Enable Mihomo built-in DNS resolver</p>
+                <p className="text-sm font-semibold text-[var(--foreground)]">{t.dns.enableDns}</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{t.dns.enableDnsDesc}</p>
               </div>
               <Switch checked={enable} onCheckedChange={setEnable} />
             </div>
@@ -140,7 +140,7 @@ export default function DNSPage() {
         {/* DNS Mode */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Enhanced Mode</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t.dns.enhancedModeTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -171,8 +171,8 @@ export default function DNSPage() {
         {/* Nameservers */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Nameservers</CardTitle>
-            <p className="text-xs text-[var(--muted)]">Primary DNS servers (one per line, supports tls:// and https://)</p>
+            <CardTitle className="text-sm font-semibold">{t.dns.nameservers}</CardTitle>
+            <p className="text-xs text-[var(--muted)]">{t.dns.nameserversDesc}</p>
           </CardHeader>
           <CardContent>
             <textarea
@@ -188,8 +188,8 @@ export default function DNSPage() {
         {/* Fallback DNS */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Fallback DNS</CardTitle>
-            <p className="text-xs text-[var(--muted)]">Fallback servers used when primary DNS is unavailable</p>
+            <CardTitle className="text-sm font-semibold">{t.dns.fallback}</CardTitle>
+            <p className="text-xs text-[var(--muted)]">{t.dns.fallbackDesc}</p>
           </CardHeader>
           <CardContent>
             <textarea
@@ -205,20 +205,20 @@ export default function DNSPage() {
         {/* Options */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">DNS Options</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t.dns.dnsOptions}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-0">
             <div className="flex items-center justify-between py-3 border-b border-[var(--border)]">
               <div>
-                <p className="text-sm font-medium text-[var(--foreground)]">Read /etc/hosts</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">Use local hosts file for name resolution</p>
+                <p className="text-sm font-medium text-[var(--foreground)]">{t.dns.useHostsLabel}</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{t.dns.useHostsDesc}</p>
               </div>
               <Switch checked={useHosts} onCheckedChange={setUseHosts} />
             </div>
             <div className="flex items-center justify-between py-3">
               <div>
-                <p className="text-sm font-medium text-[var(--foreground)]">Enhanced Mode</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">Enable DNS enhanced mode for better performance</p>
+                <p className="text-sm font-medium text-[var(--foreground)]">{t.dns.enhancedMode}</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{t.dns.enhancedModeDesc}</p>
               </div>
               <Switch checked={enhancedMode} onCheckedChange={setEnhancedMode} />
             </div>
@@ -228,8 +228,8 @@ export default function DNSPage() {
         {/* Fake IP Filter */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Fake IP Filter</CardTitle>
-            <p className="text-xs text-[var(--muted)]">Domains excluded from fake-ip (one per line)</p>
+            <CardTitle className="text-sm font-semibold">{t.dns.fakeIpFilter}</CardTitle>
+            <p className="text-xs text-[var(--muted)]">{t.dns.fakeIpFilterDesc}</p>
           </CardHeader>
           <CardContent>
             <textarea

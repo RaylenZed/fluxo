@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Topbar } from "@/components/layout/topbar";
 import { useLogs, type LogEntry } from "@/lib/hooks/use-logs";
+import { useLocale } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 type LevelFilter = "all" | "info" | "warning" | "error";
@@ -37,6 +38,8 @@ function matchesFilter(entry: LogEntry, filter: LevelFilter): boolean {
 }
 
 export default function LogsPage() {
+  const { t } = useLocale();
+  const lT = t.logs;
   const { logs, paused, connected, clear, togglePause } = useLogs(500);
   const [autoScroll, setAutoScroll] = useState(true);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
@@ -65,7 +68,7 @@ export default function LogsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Logs" description="Real-time Mihomo log stream">
+      <Topbar title={lT.title} description={lT.subtitle}>
         <div className="flex items-center gap-1.5">
           {connected ? (
             <Wifi className="h-3.5 w-3.5 text-emerald-500" />
@@ -73,7 +76,7 @@ export default function LogsPage() {
             <WifiOff className="h-3.5 w-3.5 text-[var(--muted)]" />
           )}
           <span className={cn("text-xs", connected ? "text-emerald-500" : "text-[var(--muted)]")}>
-            {connected ? "Connected" : "Disconnected"}
+            {connected ? lT.connected : lT.disconnected}
           </span>
         </div>
         <Select value={levelFilter} onValueChange={(v) => setLevelFilter(v as LevelFilter)}>
@@ -81,10 +84,10 @@ export default function LogsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Levels</SelectItem>
+            <SelectItem value="all">{lT.allLevels}</SelectItem>
             <SelectItem value="info">INFO+</SelectItem>
             <SelectItem value="warning">WARN+</SelectItem>
-            <SelectItem value="error">ERROR only</SelectItem>
+            <SelectItem value="error">{lT.errorOnly}</SelectItem>
           </SelectContent>
         </Select>
         <Button
@@ -94,15 +97,15 @@ export default function LogsPage() {
           onClick={() => setAutoScroll((v) => !v)}
         >
           <ScrollText className="h-3.5 w-3.5" />
-          {autoScroll ? "Auto-scroll On" : "Auto-scroll Off"}
+          {autoScroll ? lT.autoScrollOn : lT.autoScrollOff}
         </Button>
         <Button variant="ghost" size="sm" className="text-[var(--muted)] text-xs gap-1.5" onClick={clear}>
           <Trash2 className="h-3.5 w-3.5" />
-          Clear
+          {lT.clear}
         </Button>
         <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleExport}>
           <Download className="h-3.5 w-3.5" />
-          Export
+          {lT.export}
         </Button>
         <Button
           size="sm"
@@ -110,7 +113,7 @@ export default function LogsPage() {
           className={cn("gap-1.5 text-xs font-semibold", paused ? "bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white")}
         >
           {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
-          {paused ? "Resume" : "Pause"}
+          {paused ? lT.resume : lT.pause}
         </Button>
       </Topbar>
 
@@ -131,14 +134,14 @@ export default function LogsPage() {
                   {connected ? (
                     <>
                       <ScrollText className="h-8 w-8 text-zinc-600" />
-                      <p className="text-sm text-zinc-600">Waiting for log messages...</p>
-                      <p className="text-xs text-zinc-700">Logs will appear here as Mihomo generates them</p>
+                      <p className="text-sm text-zinc-600">{lT.waitingForLogs}</p>
+                      <p className="text-xs text-zinc-700">{lT.logsWillAppear}</p>
                     </>
                   ) : (
                     <>
                       <WifiOff className="h-8 w-8 text-zinc-600" />
-                      <p className="text-sm text-zinc-600">Waiting for Mihomo connection...</p>
-                      <p className="text-xs text-zinc-700">Make sure Mihomo is running and configured</p>
+                      <p className="text-sm text-zinc-600">{lT.waitingForMihomo}</p>
+                      <p className="text-xs text-zinc-700">{lT.mihomoRunning}</p>
                     </>
                   )}
                 </div>

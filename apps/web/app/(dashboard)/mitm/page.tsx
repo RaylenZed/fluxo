@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Topbar } from "@/components/layout/topbar";
+import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
@@ -22,14 +23,9 @@ function useSettings() {
   });
 }
 
-function copyToClipboard(text: string, label: string) {
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(`Copied ${label}`),
-    () => toast.error("Failed to copy")
-  );
-}
-
 export default function ProxyInfoPage() {
+  const { t } = useLocale();
+  const pT = t.proxyInfo;
   const { data: settings, isLoading } = useSettings();
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -39,15 +35,22 @@ export default function ProxyInfoPage() {
   const socks5Addr = `127.0.0.1:${mixedPort}`;
   const mixedAddr = `127.0.0.1:${mixedPort}`;
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${pT.copied} ${label}`),
+      () => toast.error(pT.copyFailed)
+    );
+  };
+
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
     try {
       const res = await fetch(`${API}/api/mihomo/test-ip`);
       if (!res.ok) throw new Error("Mihomo not reachable");
-      setTestResult({ ok: true, message: "Mihomo is reachable and responding" });
+      setTestResult({ ok: true, message: pT.reachable });
     } catch {
-      setTestResult({ ok: false, message: "Mihomo is not reachable. Check if it is running." });
+      setTestResult({ ok: false, message: pT.notReachable });
     } finally {
       setTesting(false);
     }
@@ -64,7 +67,7 @@ export default function ProxyInfoPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Proxy Info" description="Current proxy addresses and connectivity" />
+      <Topbar title={pT.title} description={pT.subtitle} />
 
       <div className="flex-1 p-6 overflow-auto space-y-5">
         {isLoading ? (
@@ -78,15 +81,15 @@ export default function ProxyInfoPage() {
               <CardHeader>
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Network className="h-4 w-4 text-[var(--brand-500)]" />
-                  Proxy Addresses
+                  {pT.proxyAddresses}
                 </CardTitle>
-                <p className="text-xs text-[var(--muted)]">Use these addresses in your applications</p>
+                <p className="text-xs text-[var(--muted)]">{pT.proxyAddressesDesc}</p>
               </CardHeader>
               <CardContent className="space-y-3">
                 {[
-                  { label: "HTTP Proxy", value: `http://${httpAddr}`, copy: `http://${httpAddr}` },
-                  { label: "SOCKS5 Proxy", value: `socks5://${socks5Addr}`, copy: `socks5://${socks5Addr}` },
-                  { label: "Mixed (HTTP+SOCKS5)", value: mixedAddr, copy: mixedAddr },
+                  { label: pT.httpProxy, value: `http://${httpAddr}`, copy: `http://${httpAddr}` },
+                  { label: pT.socks5Proxy, value: `socks5://${socks5Addr}`, copy: `socks5://${socks5Addr}` },
+                  { label: pT.mixed, value: mixedAddr, copy: mixedAddr },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center gap-3">
                     <div className="w-40 shrink-0">
@@ -100,7 +103,7 @@ export default function ProxyInfoPage() {
                       onClick={() => copyToClipboard(item.copy, item.label)}
                     >
                       <Copy className="h-3.5 w-3.5" />
-                      Copy
+                      {pT.copy}
                     </Button>
                   </div>
                 ))}
@@ -110,8 +113,8 @@ export default function ProxyInfoPage() {
             {/* Connectivity Test */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-semibold">Connectivity Test</CardTitle>
-                <p className="text-xs text-[var(--muted)]">Test if Mihomo core is running and responding</p>
+                <CardTitle className="text-sm font-semibold">{pT.connectivityTest}</CardTitle>
+                <p className="text-xs text-[var(--muted)]">{pT.connectivityTestDesc}</p>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
@@ -121,7 +124,7 @@ export default function ProxyInfoPage() {
                   className="gap-2"
                 >
                   {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Info className="h-4 w-4" />}
-                  Test Proxy Connection
+                  {pT.testConnection}
                 </Button>
                 {testResult && (
                   <div className={`flex items-start gap-3 rounded-[12px] border px-4 py-3 ${testResult.ok ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20" : "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20"}`}>
@@ -141,8 +144,8 @@ export default function ProxyInfoPage() {
             {/* Export Commands */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-semibold">Export Proxy Config</CardTitle>
-                <p className="text-xs text-[var(--muted)]">Copy proxy settings for various tools</p>
+                <CardTitle className="text-sm font-semibold">{pT.exportProxy}</CardTitle>
+                <p className="text-xs text-[var(--muted)]">{pT.exportProxyDesc}</p>
               </CardHeader>
               <CardContent className="space-y-2">
                 {proxyCommands.map((cmd) => (
@@ -169,8 +172,8 @@ export default function ProxyInfoPage() {
             {/* External Dashboard */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-semibold">Mihomo Dashboard</CardTitle>
-                <p className="text-xs text-[var(--muted)]">Open the built-in Mihomo web dashboard</p>
+                <CardTitle className="text-sm font-semibold">{pT.mihomoDashboard}</CardTitle>
+                <p className="text-xs text-[var(--muted)]">{pT.mihomoDashboardDesc}</p>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-3">
@@ -180,7 +183,7 @@ export default function ProxyInfoPage() {
                     onClick={() => window.open(`http://${settings?.["mihomo.external_controller"] ?? "127.0.0.1:9090"}/ui`, "_blank")}
                   >
                     <ExternalLink className="h-4 w-4" />
-                    Open Metacubexd Dashboard
+                    {pT.openDashboard}
                   </Button>
                   <span className="text-xs text-[var(--muted)]">
                     {String(settings?.["mihomo.external_controller"] ?? "127.0.0.1:9090")}

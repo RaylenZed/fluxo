@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
+import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -55,25 +56,10 @@ const policyColors: Record<string, string> = {
   REJECT: "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
-const defaultQuickAdd = [
-  {
-    label: "GeoIP CN (Direct)",
-    icon: Map,
-    data: { name: "geoip-cn", type: "http", behavior: "ipcidr", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt", interval: 86400, policy: "DIRECT" },
-  },
-  {
-    label: "GeoSite CN (Direct)",
-    icon: Globe,
-    data: { name: "geosite-cn", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt", interval: 86400, policy: "DIRECT" },
-  },
-  {
-    label: "Reject Ads",
-    icon: Database,
-    data: { name: "reject-ads", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt", interval: 86400, policy: "REJECT" },
-  },
-];
-
 export default function RuleProvidersPage() {
+  const { t } = useLocale();
+  const rT = t.ruleSets;
+
   const qc = useQueryClient();
   const { data: providers = [], isLoading } = useRuleProviders();
 
@@ -87,6 +73,24 @@ export default function RuleProvidersPage() {
     interval: "86400",
   });
 
+  const defaultQuickAdd = [
+    {
+      label: rT.geoCnDirect,
+      icon: Map,
+      data: { name: "geoip-cn", type: "http", behavior: "ipcidr", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt", interval: 86400, policy: "DIRECT" },
+    },
+    {
+      label: rT.geositeCnDirect,
+      icon: Globe,
+      data: { name: "geosite-cn", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt", interval: 86400, policy: "DIRECT" },
+    },
+    {
+      label: rT.rejectAds,
+      icon: Database,
+      data: { name: "reject-ads", type: "http", behavior: "domain", url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt", interval: 86400, policy: "REJECT" },
+    },
+  ];
+
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; type: string; behavior: string; url?: string; interval: number; policy: string }) => {
       const res = await fetch(`${API}/api/rule-providers`, {
@@ -97,8 +101,8 @@ export default function RuleProvidersPage() {
       if (!res.ok) throw new Error("Failed to create");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success("Rule provider added"); },
-    onError: () => toast.error("Failed to add rule provider"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success(rT.ruleSetAdded); },
+    onError: () => toast.error(rT.ruleSetAddFailed),
   });
 
   const deleteMutation = useMutation({
@@ -107,8 +111,8 @@ export default function RuleProvidersPage() {
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success("Rule provider deleted"); },
-    onError: () => toast.error("Failed to delete rule provider"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success(rT.ruleSetDeleted); },
+    onError: () => toast.error(rT.ruleSetDeleteFailed),
   });
 
   const handleSubmit = () => {
@@ -130,10 +134,10 @@ export default function RuleProvidersPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Rule Sets" description="Manage rule-provider subscriptions">
+      <Topbar title={rT.title} description={rT.subtitle}>
         <Button onClick={() => setShowDialog(true)} size="sm" className="gap-1.5 text-xs bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">
           <Plus className="h-3.5 w-3.5" />
-          Add Rule Set
+          {rT.addRuleSet}
         </Button>
       </Topbar>
 
@@ -141,8 +145,8 @@ export default function RuleProvidersPage() {
         {/* Quick-add section */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Quick Add</CardTitle>
-            <p className="text-xs text-[var(--muted)]">Add popular rule sets with one click</p>
+            <CardTitle className="text-sm font-semibold">{rT.quickAdd}</CardTitle>
+            <p className="text-xs text-[var(--muted)]">{rT.quickAddDesc}</p>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -159,7 +163,7 @@ export default function RuleProvidersPage() {
                     onClick={() => handleQuickAdd(item)}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    {exists ? `${item.label} (added)` : item.label}
+                    {exists ? `${item.label} ${rT.added}` : item.label}
                   </Button>
                 );
               })}
@@ -178,18 +182,18 @@ export default function RuleProvidersPage() {
               <Database className="h-7 w-7 text-[var(--muted)]" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-semibold text-[var(--foreground)]">No rule sets yet</p>
-              <p className="text-xs text-[var(--muted)] mt-1">Add rule-provider subscriptions or use the quick add buttons above.</p>
+              <p className="text-sm font-semibold text-[var(--foreground)]">{rT.noRuleSets}</p>
+              <p className="text-xs text-[var(--muted)] mt-1">{rT.noRuleSetsDesc}</p>
             </div>
           </div>
         ) : (
           <Card>
             <div className="px-4 py-2.5 border-b border-[var(--border)] grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 items-center">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Name</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-16">Type</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden sm:block">Behavior</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">Policy</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">Updated</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">{rT.nameCol}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-16">{rT.typeCol}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden sm:block">{rT.behaviorCol}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">{rT.policyCol}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] w-20 hidden md:block">{rT.updatedCol}</span>
               <span className="w-8" />
             </div>
             <CardContent className="pt-2 pb-2 px-2 space-y-0.5">
@@ -238,16 +242,16 @@ export default function RuleProvidersPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Rule Set</DialogTitle>
+            <DialogTitle>{rT.addRuleSet}</DialogTitle>
           </DialogHeader>
           <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">Name</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{rT.nameLabel}</label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="my-rule-set" className="font-mono" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-[var(--foreground)]">Type</label>
+                <label className="text-sm font-medium text-[var(--foreground)]">{rT.typeLabel}</label>
                 <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -257,7 +261,7 @@ export default function RuleProvidersPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-[var(--foreground)]">Behavior</label>
+                <label className="text-sm font-medium text-[var(--foreground)]">{rT.behaviorLabel}</label>
                 <Select value={form.behavior} onValueChange={(v) => setForm((f) => ({ ...f, behavior: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -269,23 +273,23 @@ export default function RuleProvidersPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">URL</label>
+              <label className="text-sm font-medium text-[var(--foreground)]">{rT.urlLabel}</label>
               <Input value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://cdn.jsdelivr.net/..." className="font-mono text-xs" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-[var(--foreground)]">Policy</label>
+                <label className="text-sm font-medium text-[var(--foreground)]">{rT.policyLabel}</label>
                 <Input value={form.policy} onChange={(e) => setForm((f) => ({ ...f, policy: e.target.value }))} placeholder="DIRECT" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-[var(--foreground)]">Interval (s)</label>
+                <label className="text-sm font-medium text-[var(--foreground)]">{rT.intervalLabel}</label>
                 <Input value={form.interval} onChange={(e) => setForm((f) => ({ ...f, interval: e.target.value }))} type="number" />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">Add</Button>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>{rT.cancel}</Button>
+            <Button onClick={handleSubmit} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">{rT.add}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

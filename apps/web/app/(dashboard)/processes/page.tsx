@@ -13,7 +13,7 @@ export default function ProcessesPage() {
   const processMap = new Map<string, { count: number; upload: number; download: number }>();
   for (const conn of connections) {
     const meta = conn.metadata as Record<string, string>;
-    const raw: string = meta?.process || meta?.processPath || "Unknown";
+    const raw: string = meta?.process || meta?.processPath || t.processes.unknown;
     const name = raw.split("/").pop()?.split("\\").pop() || raw;
     const existing = processMap.get(name) ?? { count: 0, upload: 0, download: 0 };
     processMap.set(name, {
