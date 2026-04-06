@@ -35,6 +35,10 @@ SERVER_PORT="${SERVER_PORT:-8090}"
 REPO_URL="https://github.com/raylenzed/fluxo"
 MIHOMO_GITHUB="https://github.com/MetaCubeX/mihomo"
 
+# GitHub proxy — prepended to all github.com URLs (e.g. https://gh-proxy.com/)
+# Can be set via env: GH_PROXY=https://gh-proxy.com/ bash install.sh
+GH_PROXY="${GH_PROXY:-}"
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 log_info()    { echo -e "${GREEN}  ✓${NC}  $*"; }
@@ -70,6 +74,36 @@ confirm() {
 
 get_primary_ip() {
   hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_SERVER_IP"
+}
+
+# Prepend GH_PROXY to a github.com URL (no-op if proxy is empty)
+gh_url() {
+  echo "${GH_PROXY}${1}"
+}
+
+# ─── 0. ask_proxy ─────────────────────────────────────────────────────────────
+
+ask_proxy() {
+  # Skip if already set via environment variable
+  if [[ -n "$GH_PROXY" ]]; then
+    log_info "GitHub proxy: ${GH_PROXY} (from env)"
+    return 0
+  fi
+
+  echo -e "  ${BOLD}GitHub 下载代理${NC}（国内服务器推荐，留空跳过）"
+  echo -e "  ${CYAN}例如: https://gh-proxy.com/${NC}"
+  echo -en "  代理 URL: "
+  read -r _proxy_input
+
+  if [[ -n "$_proxy_input" ]]; then
+    # Ensure trailing slash
+    [[ "$_proxy_input" != */ ]] && _proxy_input="${_proxy_input}/"
+    GH_PROXY="$_proxy_input"
+    log_info "GitHub proxy set: ${GH_PROXY}"
+  else
+    log_detail "No proxy — downloading directly from github.com"
+  fi
+  echo ""
 }
 
 # ─── 1. check_root ────────────────────────────────────────────────────────────
@@ -148,7 +182,8 @@ install_mihomo() {
 
   # Build download URL
   local filename="mihomo-${OS}-${ARCH}-${MIHOMO_VERSION}.gz"
-  local url="${MIHOMO_GITHUB}/releases/download/${MIHOMO_VERSION}/${filename}"
+  local url
+  url="$(gh_url "${MIHOMO_GITHUB}/releases/download/${MIHOMO_VERSION}/${filename}")"
 
   log_detail "Downloading from: $url"
   local tmpdir
@@ -282,11 +317,12 @@ install_fluxo() {
 
   if command -v git &>/dev/null; then
     log_detail "Cloning repository..."
-    git clone --depth=1 "$REPO_URL" "$INSTALL_DIR" 2>&1 | \
+    git clone --depth=1 "$(gh_url "${REPO_URL}")" "$INSTALL_DIR" 2>&1 | \
       grep -E "Cloning|done" | while read -r line; do log_detail "$line"; done
   else
     log_detail "git not found — downloading release tarball..."
-    local tarball_url="${REPO_URL}/archive/refs/heads/main.tar.gz"
+    local tarball_url
+    tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
     tmptar="$(mktemp)"
     curl -fsSL --progress-bar -o "$tmptar" "$tarball_url"
@@ -518,11 +554,13 @@ uninstall() {
 
 run_installer() {
   log_banner
+  ask_proxy
   echo -e "  Mihomo version   : ${CYAN}${MIHOMO_VERSION}${NC}"
   echo -e "  Web UI port      : ${CYAN}${WEB_PORT}${NC}"
   echo -e "  API server port  : ${CYAN}${SERVER_PORT}${NC}"
   echo -e "  Install dir      : ${CYAN}${INSTALL_DIR}${NC}"
   echo -e "  Data dir         : ${CYAN}${DATA_DIR}${NC}"
+  echo -e "  GitHub proxy     : ${CYAN}${GH_PROXY:-（none）}${NC}"
   echo -e ""
 
   check_root
@@ -551,6 +589,17 @@ case "${1:-install}" in
     echo "  MIHOMO_VERSION   Mihomo version to install (default: v1.19.10)"
     echo "  WEB_PORT         Web UI port (default: 8080)"
     echo "  SERVER_PORT      API server port (default: 8090)"
+    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)"
+    echo ""
+    echo "Examples:"
+    echo "  # Interactive (will ask for proxy)"
+    echo "  sudo bash install.sh"
+    echo ""
+    echo "  # With proxy set via env (no prompt)"
+    echo "  GH_PROXY=https://gh-proxy.com/ sudo bash install.sh"
+    echo ""
+    echo "  # One-liner with proxy"
+    echo "  GH_PROXY=https://gh-proxy.com/ curl -fsSL fluxo.click/install.sh | sudo bash"
     echo ""
     ;;
   *)

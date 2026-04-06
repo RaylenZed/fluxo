@@ -16,6 +16,12 @@ SCRIPT_VERSION="3.0.0"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/RaylenZed/fluxo/main/tools/fluxo-cli.sh"
 SCRIPT_VERSION_URL="https://raw.githubusercontent.com/RaylenZed/fluxo/main/tools/version"
 
+# GitHub proxy — set GH_PROXY env var or configure via menu
+GH_PROXY="${GH_PROXY:-}"
+
+# Prepend GH_PROXY to a github.com URL (no-op if proxy is empty)
+gh_url() { echo "${GH_PROXY}${1}"; }
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
 
@@ -155,6 +161,11 @@ main_menu() {
         echo -e " 16. Docker 代理设置      ${_root_tag}"
         echo -e " 17. 脚本自更新           ${DIM}(当前 v${SCRIPT_VERSION})${NC}"
         echo -e " 18. 卸载 Mihomo          ${_root_tag}"
+        if [ -n "$GH_PROXY" ]; then
+            echo -e " 19. GitHub 代理          ${DIM}${GH_PROXY}${NC}"
+        else
+            echo -e " 19. GitHub 代理          ${DIM}（未设置）${NC}"
+        fi
         echo "  0. 退出"
         divider
         echo ""
@@ -180,6 +191,7 @@ main_menu() {
             16) menu_docker_proxy ;;
             17) menu_self_update ;;
             18) menu_uninstall ;;
+            19) menu_gh_proxy ;;
             0)  clear; echo "  再见！"; exit 0 ;;
             *)  error "无效选项，请重新输入"; sleep 1 ;;
         esac
@@ -341,7 +353,7 @@ menu_install() {
         *) error "不支持的架构: $(uname -m)"; pause; return ;;
     esac
 
-    download_url="https://github.com/MetaCubeX/mihomo/releases/download/${latest}/mihomo-linux-${arch_name}-${latest}.gz"
+    download_url="$(gh_url "https://github.com/MetaCubeX/mihomo/releases/download/${latest}/mihomo-linux-${arch_name}-${latest}.gz")"
     info "下载中: $download_url"
     echo ""
 
@@ -376,12 +388,12 @@ menu_install() {
 _install_geodata() {
     info "下载 GeoIP 数据库..."
     curl -sL --max-time 30 -o "$CONFIG_DIR/Country.mmdb" \
-        "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb" \
+        "$(gh_url "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb")" \
         && info "Country.mmdb 下载成功" \
         || warn "Country.mmdb 下载失败，可手动放到 $CONFIG_DIR/Country.mmdb"
 
     curl -sL --max-time 30 -o "$CONFIG_DIR/ASN.mmdb" \
-        "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb" \
+        "$(gh_url "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb")" \
         && info "ASN.mmdb 下载成功" \
         || warn "ASN.mmdb 下载失败，可手动放到 $CONFIG_DIR/ASN.mmdb"
 }
@@ -610,9 +622,10 @@ _config_update_geodata() {
     clear
     title "更新 GeoIP/GeoSite 数据库"
 
-    local geoip_url="https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/country.mmdb"
-    local asn_url="https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/ASN.mmdb"
-    local geosite_url="https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat"
+    local geoip_url asn_url geosite_url
+    geoip_url="$(gh_url "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/country.mmdb")"
+    asn_url="$(gh_url "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/ASN.mmdb")"
+    geosite_url="$(gh_url "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat")"
 
     local dl_tool
     if command -v curl >/dev/null 2>&1; then
@@ -1397,7 +1410,7 @@ menu_self_update() {
     info "正在检查最新版本（最长等待 30 秒）..."
 
     local latest_ver
-    latest_ver=$(curl -fsSL --max-time 30 "$SCRIPT_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+    latest_ver=$(curl -fsSL --max-time 30 "$(gh_url "$SCRIPT_VERSION_URL")" 2>/dev/null | tr -d '[:space:]')
 
     if [ -z "$latest_ver" ]; then
         error "无法获取版本信息"
@@ -1426,7 +1439,7 @@ menu_self_update() {
     local tmp_script
     tmp_script=$(mktemp /tmp/mihomo-manager-XXXXXX.sh)
 
-    if curl -fsSL --max-time 60 -o "$tmp_script" "$SCRIPT_RAW_URL"; then
+    if curl -fsSL --max-time 60 -o "$tmp_script" "$(gh_url "$SCRIPT_RAW_URL")"; then
         if ! bash -n "$tmp_script" 2>/dev/null; then
             error "下载的文件校验失败，已中止更新"
             rm -f "$tmp_script"; pause; return
@@ -2033,10 +2046,10 @@ _webui_install() {
 
     local download_url filename
     if [ "$flavor" = "metacubexd" ]; then
-        download_url="https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+        download_url="$(gh_url "https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz")"
         filename="compressed-dist.tgz"
     else
-        download_url="https://github.com/MetaCubeX/yacd/releases/latest/download/yacd-meta.gh-pages.zip"
+        download_url="$(gh_url "https://github.com/MetaCubeX/yacd/releases/latest/download/yacd-meta.gh-pages.zip")"
         filename="yacd-meta.gh-pages.zip"
     fi
 
@@ -2257,6 +2270,45 @@ menu_uninstall() {
     fi
 
     info "卸载完成"
+    pause
+}
+
+# ════════════════════════════════════════════════════════════
+#  GitHub 代理设置
+# ════════════════════════════════════════════════════════════
+menu_gh_proxy() {
+    clear
+    title "GitHub 下载代理"
+
+    if [ -n "$GH_PROXY" ]; then
+        info "当前代理: ${GH_PROXY}"
+    else
+        warn "当前未设置代理（直连 github.com）"
+    fi
+
+    echo ""
+    echo -e "  代理 URL 将被拼接在 GitHub URL 前面，例如:"
+    echo -e "  ${DIM}https://gh-proxy.com/https://github.com/...${NC}"
+    echo ""
+    echo -e "  常用公共代理:"
+    echo -e "  ${CYAN}https://gh-proxy.com/${NC}"
+    echo ""
+    printf "  输入代理 URL（留空清除，直接回车保持不变）: "
+    read -r _input
+
+    if [ -z "$_input" ] && [ -n "$GH_PROXY" ]; then
+        # 用户输入为空且当前有代理 → 询问是否清除
+        printf "  清除当前代理？[y/N]: "
+        read -r _clear
+        case "$_clear" in [yY]*) GH_PROXY=""; info "代理已清除" ;; *) info "保持不变" ;; esac
+    elif [ -n "$_input" ]; then
+        # 确保末尾有斜杠
+        [[ "$_input" != */ ]] && _input="${_input}/"
+        GH_PROXY="$_input"
+        info "代理已设置: ${GH_PROXY}"
+    else
+        info "保持不变"
+    fi
     pause
 }
 
