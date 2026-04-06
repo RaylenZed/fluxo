@@ -331,12 +331,13 @@ install_fluxo() {
 
   mkdir -p "$INSTALL_DIR"
 
-  if command -v git &>/dev/null; then
+  # Use git clone only when no proxy is set (gh-proxy.com doesn't support git protocol)
+  if [[ -z "$GH_PROXY" ]] && command -v git &>/dev/null; then
     log_detail "Cloning repository..."
-    git clone --depth=1 "$(gh_url "${REPO_URL}")" "$INSTALL_DIR" 2>&1 | \
+    git clone --depth=1 "${REPO_URL}" "$INSTALL_DIR" 2>&1 | \
       grep -E "Cloning|done" | while read -r line; do log_detail "$line"; done
   else
-    log_detail "git not found — downloading release tarball..."
+    log_detail "Downloading release tarball..."
     local tarball_url
     tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
