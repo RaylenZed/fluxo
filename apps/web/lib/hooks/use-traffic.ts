@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useState, useRef } from 'react';
 
-const WS_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8090').replace(/^http/, 'ws') + '/ws';
+// Dynamically resolve WS URL from the current browser host (Fastify is on port 8090)
+const getWsUrl = () => {
+  if (typeof window === 'undefined') return 'ws://localhost:8090/ws';
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.hostname}:8090/ws`;
+};
 
 export interface TrafficPoint {
   t: number;
@@ -20,7 +25,7 @@ export function useRealtimeTraffic(maxPoints = 60) {
 
     function connect() {
       try {
-        const ws = new WebSocket(WS_URL);
+        const ws = new WebSocket(getWsUrl());
         wsRef.current = ws;
 
         ws.onmessage = (e) => {

@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8090';
+// Use relative path so requests go to the same origin (Next.js proxies /api/* to Fastify backend)
+const API_BASE = '';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

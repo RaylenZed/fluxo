@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 
-const WS_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090").replace(/^http/, "ws") + "/ws";
+const getWsUrl = () => {
+  if (typeof window === 'undefined') return 'ws://localhost:8090/ws';
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.hostname}:8090/ws`;
+};
 
 export interface LogEntry {
   id: number;
@@ -29,7 +33,7 @@ export function useLogs(maxLines = 500) {
 
     function connect() {
       try {
-        const ws = new WebSocket(WS_URL);
+        const ws = new WebSocket(getWsUrl());
         wsRef.current = ws;
 
         ws.onopen = () => setConnected(true);
