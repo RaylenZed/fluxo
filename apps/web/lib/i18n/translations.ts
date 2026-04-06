@@ -552,6 +552,10 @@ const translations = {
       testInterval: 'Test Interval (s)',
       tolerance: 'Tolerance (ms)',
       strategy: 'Strategy',
+      pasteUrl: 'Paste Proxy URL',
+      pasteUrlPlaceholder: 'vmess:// · vless:// · ss:// · trojan:// · hysteria2:// · tuic://',
+      parseFailed: 'Could not parse URL',
+      parsedFrom: 'Filled from URL',
     },
     // ── Policy Group dialog ───────────────────────────────────────────────────
     proxyGroup: {
@@ -1150,6 +1154,10 @@ const translations = {
       testInterval: '测试间隔 (s)',
       tolerance: '容差 (ms)',
       strategy: '策略',
+      pasteUrl: '粘贴代理 URL',
+      pasteUrlPlaceholder: 'vmess:// · vless:// · ss:// · trojan:// · hysteria2:// · tuic://',
+      parseFailed: '无法解析该 URL',
+      parsedFrom: '已从 URL 填充',
     },
     // ── 策略组对话框 ──────────────────────────────────────────────────────────
     proxyGroup: {

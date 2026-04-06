@@ -9,13 +9,12 @@ import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/settings`);
+      const res = await fetch(`/api/settings`);
       if (!res.ok) throw new Error("Failed to load settings");
       return res.json() as Promise<Record<string, unknown>>;
     },
@@ -46,7 +45,7 @@ export default function ProxyInfoPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${API}/api/mihomo/test-ip`);
+      const res = await fetch(`/api/mihomo/test-ip`);
       if (!res.ok) throw new Error("Mihomo not reachable");
       setTestResult({ ok: true, message: pT.reachable });
     } catch {

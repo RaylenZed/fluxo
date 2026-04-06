@@ -12,7 +12,6 @@ import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 interface Provider {
   id: string;
@@ -30,7 +29,7 @@ function useProviders() {
   return useQuery({
     queryKey: ["providers"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/providers`);
+      const res = await fetch(`/api/providers`);
       if (!res.ok) throw new Error("Failed to load providers");
       return res.json() as Promise<Provider[]>;
     },
@@ -60,7 +59,7 @@ export default function ProvidersPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; url: string; interval: number; filter?: string; healthCheckUrl?: string }) => {
-      const res = await fetch(`${API}/api/providers`, {
+      const res = await fetch(`/api/providers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -74,7 +73,7 @@ export default function ProvidersPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; url: string; interval: number; filter: string }> }) => {
-      const res = await fetch(`${API}/api/providers/${id}`, {
+      const res = await fetch(`/api/providers/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -88,7 +87,7 @@ export default function ProvidersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API}/api/providers/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/providers/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },
@@ -133,7 +132,7 @@ export default function ProvidersPage() {
 
   const handleUpdateNow = async (p: Provider) => {
     try {
-      const res = await fetch(`${API}/api/mihomo/providers/${encodeURIComponent(p.name)}/update`, { method: "PUT" });
+      const res = await fetch(`/api/mihomo/providers/${encodeURIComponent(p.name)}/update`, { method: "PUT" });
       if (!res.ok) throw new Error();
       toast.success(t.providers.updateNowSuccess);
     } catch {

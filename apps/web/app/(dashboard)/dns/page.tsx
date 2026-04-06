@@ -11,7 +11,6 @@ import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 interface DnsConfig {
   enable: boolean;
@@ -27,7 +26,7 @@ function useDnsConfig() {
   return useQuery({
     queryKey: ["dns"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/dns`);
+      const res = await fetch(`/api/dns`);
       if (!res.ok) throw new Error("Failed to load DNS config");
       return res.json() as Promise<DnsConfig>;
     },
@@ -40,7 +39,7 @@ function useSaveDns() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: DnsConfig) => {
-      const res = await fetch(`${API}/api/dns`, {
+      const res = await fetch(`/api/dns`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

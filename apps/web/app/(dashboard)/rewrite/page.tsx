@@ -13,7 +13,6 @@ import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 interface RuleProvider {
   id: string;
@@ -32,7 +31,7 @@ function useRuleProviders() {
   return useQuery({
     queryKey: ["rule-providers"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/rule-providers`);
+      const res = await fetch(`/api/rule-providers`);
       if (!res.ok) throw new Error("Failed to load rule providers");
       return res.json() as Promise<RuleProvider[]>;
     },
@@ -93,7 +92,7 @@ export default function RuleProvidersPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; type: string; behavior: string; url?: string; interval: number; policy: string }) => {
-      const res = await fetch(`${API}/api/rule-providers`, {
+      const res = await fetch(`/api/rule-providers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -107,7 +106,7 @@ export default function RuleProvidersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API}/api/rule-providers/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/rule-providers/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },

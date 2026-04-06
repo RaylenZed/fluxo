@@ -12,13 +12,12 @@ import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/settings`);
+      const res = await fetch(`/api/settings`);
       if (!res.ok) throw new Error("Failed to load settings");
       return res.json() as Promise<Record<string, unknown>>;
     },
@@ -30,7 +29,7 @@ function useSaveSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      const res = await fetch(`${API}/api/settings`, {
+      const res = await fetch(`/api/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -123,7 +122,7 @@ export default function SettingsPage() {
 
   const handleApplyConfig = async () => {
     try {
-      const res = await fetch(`${API}/api/config/apply`, { method: "POST" });
+      const res = await fetch(`/api/config/apply`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to apply");
       toast.success(sT.configApplied);
     } catch {

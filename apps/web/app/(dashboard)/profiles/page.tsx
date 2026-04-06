@@ -17,7 +17,6 @@ import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 interface Profile {
   id: string;
@@ -32,7 +31,7 @@ function useProfiles() {
   return useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/profiles`);
+      const res = await fetch(`/api/profiles`);
       if (!res.ok) throw new Error("Failed to load profiles");
       return res.json() as Promise<Profile[]>;
     },
@@ -57,7 +56,7 @@ export default function ProfilesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
-      const res = await fetch(`${API}/api/profiles`, {
+      const res = await fetch(`/api/profiles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -71,7 +70,7 @@ export default function ProfilesPage() {
 
   const activateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API}/api/profiles/${id}/activate`, { method: "POST" });
+      const res = await fetch(`/api/profiles/${id}/activate`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to activate");
       return res.json();
     },
@@ -81,7 +80,7 @@ export default function ProfilesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API}/api/profiles/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },

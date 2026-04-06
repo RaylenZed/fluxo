@@ -14,7 +14,6 @@ import { Topbar } from '@/components/layout/topbar';
 import { formatBytes, cn } from '@/lib/utils';
 import { useLocale } from '@/lib/i18n/context';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8090';
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -41,7 +40,7 @@ export default function OverviewPage() {
   const { data: settings } = useQuery<Record<string, unknown>>({
     queryKey: ['settings'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/settings`);
+      const res = await fetch(`/api/settings`);
       if (!res.ok) return {};
       return res.json();
     },
@@ -52,7 +51,7 @@ export default function OverviewPage() {
   const { data: mihomoStatus } = useQuery<{ running: boolean; version: string | null }>({
     queryKey: ['mihomo', 'status'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/mihomo/status`);
+      const res = await fetch(`/api/mihomo/status`);
       if (!res.ok) return { running: false, version: null };
       return res.json();
     },
@@ -64,7 +63,7 @@ export default function OverviewPage() {
   const { data: connectionsData } = useQuery<{ connections?: unknown[] }>({
     queryKey: ['mihomo', 'connections'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/mihomo/connections`);
+      const res = await fetch(`/api/mihomo/connections`);
       if (!res.ok) return { connections: [] };
       return res.json();
     },
@@ -76,7 +75,7 @@ export default function OverviewPage() {
   const { data: memoryData } = useQuery<{ inuse?: number }>({
     queryKey: ['mihomo', 'memory'],
     queryFn: async () => {
-      const res = await fetch(`${API}/api/mihomo/memory`);
+      const res = await fetch(`/api/mihomo/memory`);
       if (!res.ok) return {};
       return res.json();
     },
@@ -87,14 +86,14 @@ export default function OverviewPage() {
   // TUN toggle mutation
   const tunMutation = useMutation({
     mutationFn: async (enable: boolean) => {
-      const res = await fetch(`${API}/api/mihomo/tun`, {
+      const res = await fetch(`/api/mihomo/tun`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enable }),
       });
       if (!res.ok) throw new Error('Failed');
       // Also persist to settings
-      await fetch(`${API}/api/settings`, {
+      await fetch(`/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 'tun.enable': enable }),
@@ -111,7 +110,7 @@ export default function OverviewPage() {
   // Apply config mutation
   const applyConfig = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API}/api/config/apply`, { method: 'POST' });
+      const res = await fetch(`/api/config/apply`, { method: 'POST' });
       if (!res.ok) throw new Error('Apply failed');
       return res.json();
     },

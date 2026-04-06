@@ -9,16 +9,15 @@ import { Topbar } from "@/components/layout/topbar";
 import { formatBytes, cn } from "@/lib/utils";
 import { useLocale } from "@/lib/i18n/context";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8090";
 
 function useSystemStatus() {
   return useQuery({
     queryKey: ["system", "status"],
     queryFn: async () => {
       const [statusRes, memRes, connRes] = await Promise.all([
-        fetch(`${API}/api/mihomo/status`).then(r => r.ok ? r.json() : { running: false, version: null }),
-        fetch(`${API}/api/mihomo/memory`).then(r => r.ok ? r.json() : {}) as Promise<Record<string, number>>,
-        fetch(`${API}/api/mihomo/connections`).then(r => r.ok ? r.json() : { connections: [] }),
+        fetch(`/api/mihomo/status`).then(r => r.ok ? r.json() : { running: false, version: null }),
+        fetch(`/api/mihomo/memory`).then(r => r.ok ? r.json() : {}) as Promise<Record<string, number>>,
+        fetch(`/api/mihomo/connections`).then(r => r.ok ? r.json() : { connections: [] }),
       ]);
       return {
         running: Boolean(statusRes.running),
@@ -107,7 +106,7 @@ export default function SystemPage() {
 
   const restartMihomo = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API}/api/mihomo/reload`, { method: "POST" });
+      const res = await fetch(`/api/mihomo/reload`, { method: "POST" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

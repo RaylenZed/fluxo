@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Eye, EyeOff, ChevronDown, ChevronUp, Wifi } from "lucide-react";
+import { Eye, EyeOff, ChevronDown, ChevronUp, Wifi, Link2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useLocale } from "@/lib/i18n/context";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +20,8 @@ type Protocol =
   | "SS" | "VMess" | "VLESS" | "Trojan" | "Snell"
   | "TUIC" | "TUICv5" | "Hysteria2" | "WireGuard" | "AnyTLS" | "SSH";
 
+type IV = Record<string, string>;
+
 interface ProxyNodeDialogProps {
   open: boolean;
   onClose: () => void;
@@ -26,17 +29,152 @@ interface ProxyNodeDialogProps {
   initialProtocol?: Protocol;
 }
 
-// ─── Protocol groups (labels translated at render time) ───────────────────────
+// ─── URL Parser ───────────────────────────────────────────────────────────────
+interface ParsedProxy {
+  protocol: Protocol;
+  server: string;
+  port: string;
+  name: string;
+  extra: IV;
+}
+
+function parseProxyUrl(raw: string): ParsedProxy | null {
+  const url = raw.trim();
+  try {
+    if (url.startsWith("vmess://")) {
+      const b64 = url.slice(8).split("#")[0];
+      const json = JSON.parse(atob(b64));
+      return {
+        protocol: "VMess",
+        server: json.add ?? "",
+        port: String(json.port ?? ""),
+        name: json.ps ?? decodeURIComponent(url.split("#")[1] ?? ""),
+        extra: {
+          uuid: json.id ?? "",
+          alterId: String(json.aid ?? "0"),
+          cipher: json.scy ?? json.type ?? "auto",
+          network: json.net ?? "tcp",
+          wsPath: json.path ?? "/",
+          wsHeaders: json.host ? `{"Host":"${json.host}"}` : "",
+          tls: json.tls === "tls" ? "true" : "false",
+          sni: json.sni ?? json.host ?? "",
+        },
+      };
+    }
+
+    if (url.startsWith("vless://")) {
+      const u = new URL(url.replace("vless://", "http://"));
+      const params = Object.fromEntries(u.searchParams.entries());
+      return {
+        protocol: "VLESS",
+        server: u.hostname,
+        port: u.port,
+        name: decodeURIComponent(u.hash.slice(1)),
+        extra: {
+          uuid: u.username,
+          flow: params.flow ?? "",
+          network: params.type ?? "tcp",
+          tls: (params.security === "tls" || params.security === "reality") ? "true" : "false",
+          sni: params.sni ?? params.servername ?? "",
+          skipCert: params.allowInsecure === "1" ? "true" : "false",
+        },
+      };
+    }
+
+    if (url.startsWith("trojan://")) {
+      const u = new URL(url.replace("trojan://", "http://"));
+      const params = Object.fromEntries(u.searchParams.entries());
+      return {
+        protocol: "Trojan",
+        server: u.hostname,
+        port: u.port,
+        name: decodeURIComponent(u.hash.slice(1)),
+        extra: {
+          password: u.username,
+          network: params.type ?? "tcp",
+          sni: params.sni ?? params.peer ?? "",
+          skipCert: params.allowInsecure === "1" ? "true" : "false",
+        },
+      };
+    }
+
+    if (url.startsWith("ss://")) {
+      // ss://BASE64#name  or  ss://method:pass@host:port#name
+      const hashIdx = url.indexOf("#");
+      const name = hashIdx >= 0 ? decodeURIComponent(url.slice(hashIdx + 1)) : "";
+      const main = hashIdx >= 0 ? url.slice(5, hashIdx) : url.slice(5);
+      // Try @-form first
+      if (main.includes("@")) {
+        const u = new URL("http://" + main);
+        const [method, password] = (decodeURIComponent(u.username) + ":" + decodeURIComponent(u.password)).split(":");
+        return { protocol: "SS", server: u.hostname, port: u.port, name, extra: { cipher: method ?? "", password: password ?? "" } };
+      }
+      // Legacy base64 form
+      const decoded = atob(main);
+      const atIdx = decoded.lastIndexOf("@");
+      const creds = decoded.slice(0, atIdx);
+      const hostPort = decoded.slice(atIdx + 1);
+      const colonIdx = creds.indexOf(":");
+      const [method, password] = [creds.slice(0, colonIdx), creds.slice(colonIdx + 1)];
+      const lastColon = hostPort.lastIndexOf(":");
+      const server = hostPort.slice(0, lastColon);
+      const port = hostPort.slice(lastColon + 1);
+      return { protocol: "SS", server, port, name, extra: { cipher: method, password } };
+    }
+
+    if (url.startsWith("hysteria2://") || url.startsWith("hy2://")) {
+      const u = new URL(url.replace("hy2://", "http://").replace("hysteria2://", "http://"));
+      const params = Object.fromEntries(u.searchParams.entries());
+      return {
+        protocol: "Hysteria2",
+        server: u.hostname,
+        port: u.port,
+        name: decodeURIComponent(u.hash.slice(1)),
+        extra: {
+          password: u.username,
+          sni: params.sni ?? "",
+          skipCert: params.insecure === "1" ? "true" : "false",
+          obfs: params.obfs ?? "",
+          obfsPassword: params["obfs-password"] ?? "",
+          up: params.up ?? "",
+          down: params.down ?? "",
+        },
+      };
+    }
+
+    if (url.startsWith("tuic://")) {
+      const u = new URL(url.replace("tuic://", "http://"));
+      const params = Object.fromEntries(u.searchParams.entries());
+      return {
+        protocol: "TUIC",
+        server: u.hostname,
+        port: u.port,
+        name: decodeURIComponent(u.hash.slice(1)),
+        extra: {
+          uuid: u.username,
+          password: u.password,
+          congestion: params.congestion_control ?? "bbr",
+          alpn: params.alpn ?? "h3",
+          sni: params.sni ?? "",
+          skipCert: params.allow_insecure === "1" ? "true" : "false",
+        },
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Protocol groups ──────────────────────────────────────────────────────────
 const PROTOCOL_GROUPS_DATA: { key: "groupClassic" | "groupEncrypted" | "groupModern"; protocols: Protocol[] }[] = [
   { key: "groupClassic", protocols: ["HTTP", "HTTPS", "SOCKS5", "SOCKS5-TLS", "SSH"] },
   { key: "groupEncrypted", protocols: ["SS", "VMess", "VLESS", "Trojan", "Snell"] },
   { key: "groupModern", protocols: ["TUIC", "TUICv5", "Hysteria2", "WireGuard", "AnyTLS"] },
 ];
 
-const SS_CIPHERS = [
-  "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
-  "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm",
-];
+const SS_CIPHERS = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm"];
 const VMESS_CIPHERS = ["auto", "aes-128-gcm", "chacha20-poly1305", "none"];
 const NETWORKS = ["tcp", "ws", "h2", "grpc"];
 const CONGESTION = ["cubic", "bbr", "new_reno"];
@@ -64,9 +202,11 @@ function PasswordInput({ value, onChange, placeholder }: { value: string; onChan
   );
 }
 
-function TLSOptions({ sni, setSni, skipCert, setSkipCert }: { sni: string; setSni: (v: string) => void; skipCert: boolean; setSkipCert: (v: boolean) => void }) {
+function TLSOptions({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
+  const [sni, setSni] = useState(iv.sni ?? "");
+  const [skipCert, setSkipCert] = useState(iv.skipCert === "true");
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-[12px] border border-[var(--border)] overflow-hidden">
@@ -87,47 +227,43 @@ function TLSOptions({ sni, setSni, skipCert, setSkipCert }: { sni: string; setSn
   );
 }
 
-function HttpFields({ tls }: { tls: boolean }) {
+function HttpFields({ tls, iv = {} }: { tls: boolean; iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [username, setUsername] = useState(iv.username ?? "");
+  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.username}><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Optional" /></Field>
         <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
       </div>
-      {tls && <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />}
+      {tls && <TLSOptions iv={iv} />}
     </>
   );
 }
 
-function Socks5Fields({ tls }: { tls: boolean }) {
+function Socks5Fields({ tls, iv = {} }: { tls: boolean; iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [username, setUsername] = useState(iv.username ?? "");
+  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.username}><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Optional" /></Field>
         <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
       </div>
-      {tls && <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />}
+      {tls && <TLSOptions iv={iv} />}
     </>
   );
 }
 
-function SSFields() {
+function SSFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [cipher, setCipher] = useState(SS_CIPHERS[0]);
-  const [password, setPassword] = useState("");
+  const [cipher, setCipher] = useState(iv.cipher && SS_CIPHERS.includes(iv.cipher) ? iv.cipher : SS_CIPHERS[0]);
+  const [password, setPassword] = useState(iv.password ?? "");
   const [plugin, setPlugin] = useState("");
   const [pluginOpts, setPluginOpts] = useState("");
   return (
@@ -154,18 +290,16 @@ function SSFields() {
   );
 }
 
-function VMessFields() {
+function VMessFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState("");
-  const [alterId, setAlterId] = useState("0");
-  const [cipher, setCipher] = useState("auto");
-  const [network, setNetwork] = useState("tcp");
-  const [tls, setTls] = useState(false);
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
-  const [wsPath, setWsPath] = useState("/");
-  const [wsHeaders, setWsHeaders] = useState("");
+  const [uuid, setUuid] = useState(iv.uuid ?? "");
+  const [alterId, setAlterId] = useState(iv.alterId ?? "0");
+  const [cipher, setCipher] = useState(iv.cipher && VMESS_CIPHERS.includes(iv.cipher) ? iv.cipher : "auto");
+  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
+  const [tls, setTls] = useState(iv.tls === "true");
+  const [wsPath, setWsPath] = useState(iv.wsPath ?? "/");
+  const [wsHeaders, setWsHeaders] = useState(iv.wsHeaders ?? "");
   return (
     <>
       <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
@@ -198,20 +332,18 @@ function VMessFields() {
           <Field label={pT.wsHeaders}><Input value={wsHeaders} onChange={(e) => setWsHeaders(e.target.value)} placeholder='{"Host":"example.com"}' className="font-mono text-xs" /></Field>
         </div>
       )}
-      {tls && <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />}
+      {tls && <TLSOptions iv={iv} />}
     </>
   );
 }
 
-function VLESSFields() {
+function VLESSFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState("");
-  const [flow, setFlow] = useState("");
-  const [network, setNetwork] = useState("tcp");
-  const [tls, setTls] = useState(false);
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [uuid, setUuid] = useState(iv.uuid ?? "");
+  const [flow, setFlow] = useState(iv.flow ?? "");
+  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
+  const [tls, setTls] = useState(iv.tls === "true");
   return (
     <>
       <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
@@ -236,18 +368,16 @@ function VLESSFields() {
         <span className="text-sm text-[var(--foreground)]">TLS</span>
         <Switch checked={tls} onCheckedChange={setTls} />
       </label>
-      {tls && <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />}
+      {tls && <TLSOptions iv={iv} />}
     </>
   );
 }
 
-function TrojanFields() {
+function TrojanFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState("");
-  const [network, setNetwork] = useState("tcp");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [password, setPassword] = useState(iv.password ?? "");
+  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
   return (
     <>
       <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
@@ -257,18 +387,18 @@ function TrojanFields() {
           <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
-      <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />
+      <TLSOptions iv={iv} />
     </>
   );
 }
 
-function SnellFields() {
+function SnellFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [psk, setPsk] = useState("");
-  const [version, setVersion] = useState("3");
-  const [obfs, setObfs] = useState("simple");
-  const [obfsHost, setObfsHost] = useState("");
+  const [psk, setPsk] = useState(iv.psk ?? "");
+  const [version, setVersion] = useState(iv.version ?? "3");
+  const [obfs, setObfs] = useState(iv.obfs ?? "simple");
+  const [obfsHost, setObfsHost] = useState(iv.obfsHost ?? "");
   return (
     <>
       <Field label={pT.psk}><PasswordInput value={psk} onChange={setPsk} placeholder="Pre-shared key" /></Field>
@@ -298,16 +428,14 @@ function SnellFields() {
   );
 }
 
-function TuicFields({ v5 }: { v5?: boolean }) {
+function TuicFields({ v5, iv = {} }: { v5?: boolean; iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState("");
-  const [password, setPassword] = useState("");
-  const [congestion, setCongestion] = useState("bbr");
-  const [udpRelay, setUdpRelay] = useState("native");
-  const [alpn, setAlpn] = useState("h3");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [uuid, setUuid] = useState(iv.uuid ?? "");
+  const [password, setPassword] = useState(iv.password ?? "");
+  const [congestion, setCongestion] = useState(iv.congestion ?? "bbr");
+  const [udpRelay, setUdpRelay] = useState(iv.udpRelay ?? "native");
+  const [alpn, setAlpn] = useState(iv.alpn ?? "h3");
   return (
     <>
       <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
@@ -330,21 +458,19 @@ function TuicFields({ v5 }: { v5?: boolean }) {
           </Field>
         )}
       </div>
-      <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />
+      <TLSOptions iv={iv} />
     </>
   );
 }
 
-function Hysteria2Fields() {
+function Hysteria2Fields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState("");
-  const [obfs, setObfs] = useState("");
-  const [obfsPassword, setObfsPassword] = useState("");
-  const [up, setUp] = useState("");
-  const [down, setDown] = useState("");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [password, setPassword] = useState(iv.password ?? "");
+  const [obfs, setObfs] = useState(iv.obfs ?? "");
+  const [obfsPassword, setObfsPassword] = useState(iv.obfsPassword ?? "");
+  const [up, setUp] = useState(iv.up ?? "");
+  const [down, setDown] = useState(iv.down ?? "");
   return (
     <>
       <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
@@ -364,21 +490,21 @@ function Hysteria2Fields() {
         </Field>
         {obfs === "salamander" && <Field label={pT.obfsPassword}><PasswordInput value={obfsPassword} onChange={setObfsPassword} placeholder="Obfs password" /></Field>}
       </div>
-      <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />
+      <TLSOptions iv={iv} />
     </>
   );
 }
 
-function WireGuardFields() {
+function WireGuardFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [ip, setIp] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [publicKey, setPublicKey] = useState("");
-  const [presharedKey, setPresharedKey] = useState("");
-  const [dns, setDns] = useState("");
-  const [mtu, setMtu] = useState("1420");
-  const [reserved, setReserved] = useState("");
+  const [ip, setIp] = useState(iv.ip ?? "");
+  const [privateKey, setPrivateKey] = useState(iv.privateKey ?? "");
+  const [publicKey, setPublicKey] = useState(iv.publicKey ?? "");
+  const [presharedKey, setPresharedKey] = useState(iv.presharedKey ?? "");
+  const [dns, setDns] = useState(iv.dns ?? "");
+  const [mtu, setMtu] = useState(iv.mtu ?? "1420");
+  const [reserved, setReserved] = useState(iv.reserved ?? "");
   return (
     <>
       <Field label={pT.interfaceIp}><Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="10.0.0.2/32" className="font-mono" /></Field>
@@ -394,27 +520,25 @@ function WireGuardFields() {
   );
 }
 
-function AnyTLSFields() {
+function AnyTLSFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState("");
-  const [sni, setSni] = useState("");
-  const [skipCert, setSkipCert] = useState(false);
+  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
       <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
-      <TLSOptions sni={sni} setSni={setSni} skipCert={skipCert} setSkipCert={setSkipCert} />
+      <TLSOptions iv={iv} />
     </>
   );
 }
 
-function SSHFields() {
+function SSHFields({ iv = {} }: { iv?: IV }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [hostKey, setHostKey] = useState("");
+  const [username, setUsername] = useState(iv.username ?? "");
+  const [password, setPassword] = useState(iv.password ?? "");
+  const [privateKey, setPrivateKey] = useState(iv.privateKey ?? "");
+  const [hostKey, setHostKey] = useState(iv.hostKey ?? "");
   const [useKey, setUseKey] = useState(false);
   return (
     <>
@@ -426,8 +550,7 @@ function SSHFields() {
       {useKey ? (
         <Field label={`${pT.privateKey} (PEM)`}>
           <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
-            className={cn("w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]", "px-3 py-2 text-xs font-mono text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]", "focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] focus:border-transparent", "resize-none transition-all duration-150")}
-          />
+            className={cn("w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]", "px-3 py-2 text-xs font-mono text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]", "focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] focus:border-transparent resize-none transition-all duration-150")} />
         </Field>
       ) : (
         <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
@@ -437,30 +560,33 @@ function SSHFields() {
   );
 }
 
-function ProtocolFields({ protocol }: { protocol: Protocol }) {
+function ProtocolFields({ protocol, iv, fieldKey }: { protocol: Protocol; iv: IV; fieldKey: number }) {
+  const props = { iv, key: fieldKey };
   switch (protocol) {
-    case "HTTP":   return <HttpFields tls={false} />;
-    case "HTTPS":  return <HttpFields tls={true} />;
-    case "SOCKS5":     return <Socks5Fields tls={false} />;
-    case "SOCKS5-TLS": return <Socks5Fields tls={true} />;
-    case "SS":      return <SSFields />;
-    case "VMess":   return <VMessFields />;
-    case "VLESS":   return <VLESSFields />;
-    case "Trojan":  return <TrojanFields />;
-    case "Snell":   return <SnellFields />;
-    case "TUIC":    return <TuicFields v5={false} />;
-    case "TUICv5":  return <TuicFields v5={true} />;
-    case "Hysteria2": return <Hysteria2Fields />;
-    case "WireGuard": return <WireGuardFields />;
-    case "AnyTLS": return <AnyTLSFields />;
-    case "SSH":     return <SSHFields />;
+    case "HTTP":       return <HttpFields tls={false} {...props} />;
+    case "HTTPS":      return <HttpFields tls={true} {...props} />;
+    case "SOCKS5":     return <Socks5Fields tls={false} {...props} />;
+    case "SOCKS5-TLS": return <Socks5Fields tls={true} {...props} />;
+    case "SS":         return <SSFields {...props} />;
+    case "VMess":      return <VMessFields {...props} />;
+    case "VLESS":      return <VLESSFields {...props} />;
+    case "Trojan":     return <TrojanFields {...props} />;
+    case "Snell":      return <SnellFields {...props} />;
+    case "TUIC":       return <TuicFields v5={false} {...props} />;
+    case "TUICv5":     return <TuicFields v5={true} {...props} />;
+    case "Hysteria2":  return <Hysteria2Fields {...props} />;
+    case "WireGuard":  return <WireGuardFields {...props} />;
+    case "AnyTLS":     return <AnyTLSFields {...props} />;
+    case "SSH":        return <SSHFields {...props} />;
     default: return null;
   }
 }
 
+// ─── Dialog ────────────────────────────────────────────────────────────────────
 export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMess" }: ProxyNodeDialogProps) {
   const { t } = useLocale();
   const pT = t.proxyNode;
+
   const [protocol, setProtocol] = useState<Protocol>(initialProtocol);
   const [name, setName] = useState("");
   const [server, setServer] = useState("");
@@ -469,6 +595,26 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
   const [tfo, setTfo] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [testing, setTesting] = useState(false);
+  const [pasteUrl, setPasteUrl] = useState("");
+  const [iv, setIv] = useState<IV>({});
+  const [fieldKey, setFieldKey] = useState(0);
+
+  function handlePaste(raw: string) {
+    setPasteUrl(raw);
+    if (!raw.trim()) return;
+    const parsed = parseProxyUrl(raw.trim());
+    if (!parsed) {
+      toast.error(pT.parseFailed);
+      return;
+    }
+    setProtocol(parsed.protocol);
+    setServer(parsed.server);
+    setPort(parsed.port);
+    if (parsed.name) setName(parsed.name);
+    setIv(parsed.extra);
+    setFieldKey((k) => k + 1); // force sub-component remount with new initialValues
+    toast.success(pT.parsedFrom);
+  }
 
   function handleTest() {
     setTesting(true);
@@ -484,13 +630,22 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
         </DialogHeader>
 
         <div className="px-6 pb-2 space-y-5">
+          {/* URL paste area */}
+          <div className="rounded-[12px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 flex items-center gap-2">
+            <Link2 className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
+            <input
+              value={pasteUrl}
+              onChange={(e) => handlePaste(e.target.value)}
+              placeholder={pT.pasteUrlPlaceholder}
+              className="flex-1 bg-transparent text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none font-mono"
+            />
+          </div>
+
           {/* Protocol selector */}
           <div className="space-y-2">
             {PROTOCOL_GROUPS_DATA.map((group) => (
               <div key={group.key}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5">
-                  {pT[group.key]}
-                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5">{pT[group.key]}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {group.protocols.map((p) => (
                     <button key={p} onClick={() => setProtocol(p)}
@@ -514,7 +669,7 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
             <Field label={pT.port}><Input type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="443" /></Field>
           </div>
 
-          <ProtocolFields protocol={protocol} />
+          <ProtocolFields protocol={protocol} iv={iv} fieldKey={fieldKey} />
 
           <div className="h-px bg-[var(--border)]" />
 
@@ -541,8 +696,7 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
 
           <Field label={pT.remarks}>
             <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={pT.remarksPlaceholder} rows={2}
-              className={cn("w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]", "px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]", "focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] focus:border-transparent", "resize-none transition-all duration-150")}
-            />
+              className={cn("w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]", "px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]", "focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] focus:border-transparent resize-none transition-all duration-150")} />
           </Field>
         </div>
 
