@@ -16,6 +16,7 @@ Fluxo 是一个面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clas
 - **Rule Sets** — 规则集（Rule Provider）管理
 - **Docker 一键部署** — `docker compose up -d` 即可运行
 - **直接安装** — 支持 Debian/Ubuntu 直接安装（含 systemd 服务）
+- **`fluxo-cli`** — 交互式 CLI 工具，管理 Mihomo 服务、Tailscale 共存、Docker 代理、GeoIP 更新
 
 ## Tech Stack
 
@@ -68,6 +69,19 @@ Requires Mihomo running on the host with `external-controller: 0.0.0.0:9090`.
 - **API Server**: Fastify 5, port 8090
 - **Mihomo Core**: Runs on the host machine (TUN mode requires host kernel access)
 
+## fluxo-cli
+
+直接安装后自动获得 `fluxo-cli` 交互式管理工具：
+
+```bash
+fluxo-cli          # 进入菜单
+fluxo-cli status   # 快速查看状态
+fluxo-cli test     # 网络连通性测试（Google/ChatGPT/Claude 等）
+fluxo-cli log      # 查看日志
+```
+
+功能涵盖：Mihomo 安装/更新、TUN 路由配置、Tailscale 管理与共存、Docker 代理设置、GeoIP 数据库更新。
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR guidelines.
@@ -80,4 +94,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 - [Mihomo (Clash.Meta)](https://github.com/MetaCubeX/mihomo) — Proxy core
 - [neko-master](https://github.com/foru17/neko-master) — Traffic monitoring architecture reference
-- [mihomo-manager](https://github.com/RaylenZed/mihomo-manager) — System management scripts
+- [mihomo-manager](https://github.com/RaylenZed/mihomo-manager) — Merged into `fluxo-cli` (`tools/fluxo-cli.sh`)

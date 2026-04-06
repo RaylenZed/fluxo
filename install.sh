@@ -302,6 +302,12 @@ install_fluxo() {
   pnpm turbo build 2>&1 | grep -E "✓|error|warn" | head -20 | while read -r line; do log_detail "$line"; done
 
   log_info "Fluxo built successfully"
+
+  # Install fluxo-cli (system management CLI tool)
+  log_detail "Installing fluxo-cli..."
+  cp "$INSTALL_DIR/tools/fluxo-cli.sh" /usr/local/bin/fluxo-cli
+  chmod +x /usr/local/bin/fluxo-cli
+  log_info "fluxo-cli installed → /usr/local/bin/fluxo-cli"
 }
 
 # ─── 8. create_systemd_services ──────────────────────────────────────────────
@@ -447,10 +453,13 @@ show_summary() {
   echo -e "  SOCKS5 proxy     : ${ip}:7891"
   echo -e ""
   echo -e "${BOLD}  Useful commands:${NC}"
+  echo -e "  ${CYAN}fluxo-cli${NC}                         — interactive CLI (Mihomo + Tailscale + Docker)"
+  echo -e "  ${CYAN}fluxo-cli status${NC}                  — quick status"
+  echo -e "  ${CYAN}fluxo-cli test${NC}                    — network connectivity test"
   echo -e "  ${CYAN}systemctl status mihomo${NC}           — core status"
-  echo -e "  ${CYAN}systemctl status fluxo${NC}           — dashboard status"
+  echo -e "  ${CYAN}systemctl status fluxo${NC}            — dashboard status"
   echo -e "  ${CYAN}journalctl -fu mihomo${NC}             — core logs (live)"
-  echo -e "  ${CYAN}journalctl -fu fluxo${NC}             — dashboard logs (live)"
+  echo -e "  ${CYAN}journalctl -fu fluxo${NC}              — dashboard logs (live)"
   echo -e "  ${CYAN}bash install.sh --uninstall${NC}       — uninstall everything"
   echo -e ""
   echo -e "${YELLOW}  Config file: ${MIHOMO_CONFIG_DIR}/config.yaml${NC}"
