@@ -96,7 +96,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-3">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
         {navItems.map((section) => (
           <div key={section.group} className="mb-1">
             <p className="mb-1 mt-4 px-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
@@ -139,7 +139,7 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom items + language switcher */}
-      <div className="px-3 pb-4 border-t border-[var(--sidebar-border)] pt-3">
+      <div className="shrink-0 px-3 pb-4 border-t border-[var(--sidebar-border)] pt-3">
         {bottomItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href);
           return (
