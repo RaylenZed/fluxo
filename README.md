@@ -4,31 +4,60 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-Fluxo 是一个面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta) 的可视化配置管理、实时流量监控和系统管理合为一体。
+Fluxo 是面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta) 的可视化配置管理、实时流量监控和系统管理合为一体。支持中英文界面切换。
+
+---
 
 ## Features
 
-- **Modern Dashboard UI** — 紫色 SaaS 风格，毛玻璃侧边栏，圆角卡片
-- **全功能配置管理** — 可视化添加节点、编辑策略组、管理规则，一键生成并热重载 YAML
-- **实时监控** — WebSocket 流量统计、连接列表、请求日志
-- **DNS 管理** — Fake-IP / redir-host 模式，自定义上游 DNS
-- **Proxy Provider** — 订阅链接管理，一键刷新
-- **Rule Sets** — 规则集（Rule Provider）管理
-- **Docker 一键部署** — `docker compose up -d` 即可运行
-- **直接安装** — 支持 Debian/Ubuntu 直接安装（含 systemd 服务）
-- **`fluxo-cli`** — 交互式 CLI 工具，管理 Mihomo 服务、Tailscale 共存、Docker 代理、GeoIP 更新
+### 概览 & 监控
+- **仪表板** — 实时内存占用、服务运行时长、网络模式、TUN 状态
+- **活动** — WebSocket 实时连接日志，带流量统计
+- **总览** — 实时上行/下行流量图表、连接数、日志流
+
+### 代理管理
+- **策略页** — 可视化管理代理节点与策略组
+  - 支持 15 种协议：HTTP / HTTPS / SOCKS5 / SOCKS5-TLS / SSH / SS / VMess / VLESS / Trojan / Snell / TUIC / TUICv5 / Hysteria2 / WireGuard / AnyTLS
+  - **URL 自动解析**：粘贴 `vmess://` `vless://` `ss://` `trojan://` `hysteria2://` `tuic://` 链接自动填充表单
+  - 节点编辑 / 删除
+  - 策略组：手动选择 / 自动测速 / 故障转移 / 负载均衡
+  - **应用配置**：将 DB 中所有节点、策略组、规则生成 YAML 并热重载 Mihomo
+- **规则** — 可视化规则列表，支持拖拽排序、新增、删除
+
+### 系统配置
+- **设置** — 混合端口、allow-lan、日志级别、IPv6、TUN 模式（即时生效）、远程控制器地址和密钥
+- **DNS** — Fake-IP / redir-host / normal 模式，上游 DNS、fallback DNS、Fake-IP 过滤列表
+- **配置编辑器** — 直接编辑原始 YAML；保护 8080/8090/9090 等关键端口，修改前警告
+- **订阅** — 代理 Provider 订阅链接管理（URL、更新间隔、健康检查）
+- **规则集** — Rule Provider 管理
+
+### 系统工具
+- **进程** — 查看经过代理的进程
+- **设备** — 局域网设备列表
+- **日志** — Mihomo 实时日志（WebSocket）
+- **系统** — Mihomo 服务状态、内存、连接数、运行时长；一键重启/重载
+
+### 其他
+- **中英文** — 完整的 zh / en 双语界面，右下角一键切换
+- **fluxo-cli** — 交互式 Shell 工具（直接安装时附带）
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js 16 + React 19 + TypeScript |
-| Styling | Tailwind CSS 4 + Radix UI |
+| Styling | Tailwind CSS 4 + Radix UI (shadcn/ui) |
 | Charts | Recharts |
+| State | TanStack Query v5 |
 | Backend | Fastify 5 + TypeScript |
 | Database | SQLite (better-sqlite3) |
 | Realtime | WebSocket |
-| Deploy | Docker + Docker Compose / systemd |
+| i18n | React Context + translations.ts |
+| Deploy | Docker Compose / systemd |
+
+---
 
 ## Quick Start
 
@@ -45,29 +74,89 @@ pnpm dev  # Web: http://localhost:38080 | API: http://localhost:8090
 curl -fsSL fluxo.click/install.sh | sudo bash
 ```
 
+安装后自动创建两个 systemd 服务：
+
+| 服务 | 说明 | 端口 |
+|------|------|------|
+| `fluxo` | Fastify API 服务 | 8090 |
+| `fluxo-web` | Next.js Web UI | 8080 |
+
 ### Production — Docker
 
+前提：宿主机已运行 Mihomo，且 `external-controller: 0.0.0.0:9090`。
+
 ```bash
+# 默认（Mihomo API 在 host-gateway:9090）
 docker compose up -d
+
+# 自定义 Mihomo 地址
+MIHOMO_API_URL=http://192.168.1.100:9090 MIHOMO_SECRET=yourSecret docker compose up -d
 ```
 
-Requires Mihomo running on the host with `external-controller: 0.0.0.0:9090`.
+Docker 挂载说明：
+
+| 挂载 | 说明 |
+|------|------|
+| `/etc/mihomo` (rw) | Mihomo 配置目录，Fluxo 会写入 `config.yaml` |
+| `fluxo_data:/data` | SQLite 数据库持久化 |
+
+---
+
+## Environment Variables
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `MIHOMO_API_URL` | *(读 DB 设置)* | Mihomo REST API 地址，优先级高于 DB |
+| `MIHOMO_SECRET` | *(读 DB 设置)* | Mihomo API 密钥，与 `MIHOMO_API_URL` 配合使用 |
+| `CONFIG_PATH` | `/etc/mihomo/config.yaml` | Mihomo 配置文件路径 |
+| `DB_PATH` | `./data/fluxo.db` | SQLite 数据库路径 |
+| `WEB_PORT` | `8080` | Web UI 监听端口 |
+| `SERVER_PORT` | `8090` | API 服务监听端口 |
+
+> **注意**：`MIHOMO_API_URL` 和 `MIHOMO_SECRET` 设置后优先于数据库中的 `mihomo.external_controller` / `mihomo.secret`，适合 Docker 环境下固定连接宿主机 Mihomo。
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│  Browser  →  Fluxo Web UI (Next.js :8080)  │
-│               ↕ REST + WebSocket             │
-│  API Server (Fastify :8090)  →  SQLite DB   │
-│               ↕ HTTP / WebSocket relay       │
-│  Mihomo Core (host :9090)                   │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Browser  →  Fluxo Web UI (Next.js :8080)           │
+│               ↕ /api/* proxy (relative paths)        │
+│  API Server (Fastify :8090)  →  SQLite DB            │
+│               ↕ HTTP + WebSocket relay               │
+│  Mihomo Core (host :9090)                            │
+└─────────────────────────────────────────────────────┘
 ```
 
-- **Web UI**: Next.js 16 standalone, port 38080 (dev) / 8080 (production)
-- **API Server**: Fastify 5, port 8090
-- **Mihomo Core**: Runs on the host machine (TUN mode requires host kernel access)
+- **Web UI**: Next.js 16 standalone，所有 `/api/*` 请求由 Next.js server-side 转发到 Fastify，远程浏览器无需直连 8090
+- **API Server**: Fastify 5，管理 SQLite DB、生成/应用 YAML、转发 Mihomo REST API
+- **Mihomo Core**: 运行在宿主机（TUN 模式需要宿主机内核权限）
+
+---
+
+## Config Generation
+
+点击策略页"**应用配置**"时，Fluxo 执行：
+
+1. 从 SQLite 读取所有代理节点、策略组、规则、规则集、DNS 配置
+2. 生成 YAML（`js-yaml`）
+3. 写入 `CONFIG_PATH`（默认 `/etc/mihomo/config.yaml`）
+4. 通过 Mihomo REST API `PUT /configs` 热重载
+
+---
+
+## Reserved Ports
+
+以下端口由 Fluxo 自身使用，**配置编辑器会在保存前警告**：
+
+| 端口 | 服务 |
+|------|------|
+| 8080 | Fluxo Web UI |
+| 8090 | Fluxo API Server |
+| 9090 | Mihomo external-controller |
+
+---
 
 ## fluxo-cli
 
@@ -76,19 +165,25 @@ Requires Mihomo running on the host with `external-controller: 0.0.0.0:9090`.
 ```bash
 fluxo-cli          # 进入菜单
 fluxo-cli status   # 快速查看状态
-fluxo-cli test     # 网络连通性测试（Google/ChatGPT/Claude 等）
+fluxo-cli test     # 网络连通性测试（Google / ChatGPT / Claude 等）
 fluxo-cli log      # 查看日志
 ```
 
 功能涵盖：Mihomo 安装/更新、TUN 路由配置、Tailscale 管理与共存、Docker 代理设置、GeoIP 数据库更新。
 
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR guidelines.
 
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+---
 
 ## Credits
 
