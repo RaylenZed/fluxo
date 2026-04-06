@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Vortex
+about: Suggest an idea for Fluxo
 title: '[Feature] '
 labels: enhancement
 assignees: ''

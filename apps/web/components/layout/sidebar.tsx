@@ -89,7 +89,7 @@ export function Sidebar() {
           <Zap className="h-4 w-4 text-white" />
         </div>
         <div>
-          <span className="text-[15px] font-bold text-[var(--brand-500)] tracking-tight">Vortex</span>
+          <span className="text-[15px] font-bold text-[var(--brand-500)] tracking-tight">Fluxo</span>
         </div>
       </div>
 

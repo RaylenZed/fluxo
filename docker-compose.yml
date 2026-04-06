@@ -1,7 +1,7 @@
 version: "3.9"
 
 # ============================================================
-# Vortex — Docker Compose
+# Fluxo — Docker Compose
 # ============================================================
 # Usage:
 #   docker compose up -d
@@ -16,12 +16,12 @@ version: "3.9"
 # ============================================================
 
 services:
-  vortex:
-    image: vortex:latest
+  fluxo:
+    image: fluxo:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vortex
+    container_name: fluxo
     restart: unless-stopped
 
     ports:
@@ -30,11 +30,11 @@ services:
 
     volumes:
       - /etc/mihomo:/etc/mihomo:ro        # Mihomo config (read-only from container)
-      - vortex_data:/data                 # Persistent SQLite DB + uploads
+      - fluxo_data:/data                 # Persistent SQLite DB + uploads
 
     environment:
       - NODE_ENV=production
-      - DB_PATH=/data/vortex.db
+      - DB_PATH=/data/fluxo.db
       - WEB_PORT=8080
       - SERVER_PORT=8090
       # Point to Mihomo running on the host (or another container)
@@ -59,5 +59,5 @@ services:
         max-file: "3"
 
 volumes:
-  vortex_data:
+  fluxo_data:
     driver: local

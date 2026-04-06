@@ -19,14 +19,14 @@ Steps to reproduce the behavior:
 A clear and concise description of what you expected to happen.
 
 **Environment**
-- Vortex version:
+- Fluxo version:
 - Deployment: [ ] Docker  [ ] Direct install  [ ] Development
 - OS: [e.g. Ubuntu 22.04]
 - Browser: [e.g. Chrome 120]
 - Mihomo version:
 
 **Logs**
-Paste relevant logs from `journalctl -u vortex -n 50` or browser console.
+Paste relevant logs from `journalctl -u fluxo -n 50` or browser console.
 
 **Additional context**
 Add any other context about the problem here.

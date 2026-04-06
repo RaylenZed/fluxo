@@ -1,10 +1,10 @@
-# Vortex
+# Fluxo
 
-> Harness the flow. — Modern web dashboard for Mihomo (Clash.Meta)
+> Let it flow. — Modern web dashboard for Mihomo (Clash.Meta)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-Vortex 是一个面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta) 的可视化配置管理、实时流量监控和系统管理合为一体。
+Fluxo 是一个面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta) 的可视化配置管理、实时流量监控和系统管理合为一体。
 
 ## Features
 
@@ -41,7 +41,7 @@ pnpm dev  # Web: http://localhost:38080 | API: http://localhost:8090
 ### Production — Direct Install (Debian/Ubuntu)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/raylenzed/vortex/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/raylenzed/fluxo/main/install.sh | sudo bash
 ```
 
 ### Production — Docker
@@ -56,7 +56,7 @@ Requires Mihomo running on the host with `external-controller: 0.0.0.0:9090`.
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Browser  →  Vortex Web UI (Next.js :8080)  │
+│  Browser  →  Fluxo Web UI (Next.js :8080)  │
 │               ↕ REST + WebSocket             │
 │  API Server (Fastify :8090)  →  SQLite DB   │
 │               ↕ HTTP / WebSocket relay       │

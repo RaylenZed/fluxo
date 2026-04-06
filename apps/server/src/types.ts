@@ -16,7 +16,7 @@ export type {
   WsMessage,
   WsMessageType,
   ApiResponse,
-} from '@vortex-net/shared';
+} from '@fluxo/shared';
 
 // Server-specific types
 export interface DbRow {

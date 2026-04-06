@@ -1,6 +1,6 @@
-# Contributing to Vortex
+# Contributing to Fluxo
 
-Thank you for your interest in contributing to Vortex!
+Thank you for your interest in contributing to Fluxo!
 
 ## Development Setup
 
@@ -14,8 +14,8 @@ Thank you for your interest in contributing to Vortex!
 
 ```bash
 # Clone the repo
-git clone https://github.com/raylenzed/vortex.git
-cd vortex
+git clone https://github.com/raylenzed/fluxo.git
+cd fluxo
 
 # Install dependencies
 pnpm install
@@ -32,7 +32,7 @@ pnpm dev
 ### Project Structure
 
 ```
-vortex/
+fluxo/
 ├── apps/
 │   ├── web/          # Next.js 16 frontend
 │   └── server/       # Fastify 5 backend

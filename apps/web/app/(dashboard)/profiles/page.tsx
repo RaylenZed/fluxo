@@ -128,7 +128,7 @@ export default function ProfilesPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[var(--muted)] mb-1">Profile Storage Path</p>
-              <Input value="~/.config/vortex/profiles" readOnly className="bg-[var(--surface-2)] font-mono text-xs" />
+              <Input value="~/.config/fluxo/profiles" readOnly className="bg-[var(--surface-2)] font-mono text-xs" />
             </div>
           </div>
         </Card>

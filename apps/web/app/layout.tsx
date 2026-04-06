@@ -5,8 +5,8 @@ import { QueryProvider } from "@/lib/query-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vortex",
-  description: "Modern web dashboard for Mihomo (Clash.Meta) — Harness the flow.",
+  title: "Fluxo",
+  description: "Modern web dashboard for Mihomo (Clash.Meta) — Let it flow.",
 };
 
 export default function RootLayout({

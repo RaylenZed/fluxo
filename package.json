@@ -1,10 +1,10 @@
 {
-  "name": "vortex",
+  "name": "fluxo",
   "private": true,
   "version": "0.1.0",
-  "description": "Modern web dashboard for Mihomo (Clash.Meta) — Harness the flow.",
+  "description": "Modern web dashboard for Mihomo (Clash.Meta) — Let it flow.",
   "license": "MIT",
-  "keywords": ["mihomo", "clash", "proxy", "dashboard", "vortex"],
+  "keywords": ["mihomo", "clash", "proxy", "dashboard", "fluxo"],
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
