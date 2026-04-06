@@ -32,7 +32,7 @@ MIHOMO_CONFIG_DIR="/etc/mihomo"
 MIHOMO_BINARY="/usr/local/bin/mihomo"
 WEB_PORT="${WEB_PORT:-8080}"
 SERVER_PORT="${SERVER_PORT:-8090}"
-REPO_URL="https://github.com/raylenzed/fluxo"
+REPO_URL="https://github.com/RaylenZed/fluxo"
 MIHOMO_GITHUB="https://github.com/MetaCubeX/mihomo"
 
 # GitHub proxy — prepended to all github.com URLs (e.g. https://gh-proxy.com/)
