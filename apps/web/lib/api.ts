@@ -128,3 +128,19 @@ export const mihomoApi = {
   closeConnection: (id: string) => request<void>(`/api/mihomo/connections/${id}`, { method: 'DELETE' }),
   reload: () => request<{ ok: boolean }>('/api/mihomo/reload', { method: 'POST' }),
 };
+
+// --- Auth ---
+export const authApi = {
+  me: () => request<{ authenticated: boolean; setupRequired: boolean }>('/api/auth/me'),
+  login: (password: string) =>
+    request<{ ok: boolean }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  setup: (password: string) =>
+    request<{ ok: boolean }>('/api/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+};
