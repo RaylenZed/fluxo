@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,13 +70,15 @@ export default function DNSPage() {
 
   useEffect(() => {
     if (!data) return;
-    setEnable(data.enable);
-    setMode(data.mode);
-    setNameservers(data.nameservers.join("\n"));
-    setFallbackDns(data.fallback_dns.join("\n"));
-    setFakeIpFilter(data.fake_ip_filter.join("\n"));
-    setUseHosts(data.use_hosts);
-    setEnhancedMode(data.enhanced_mode);
+    startTransition(() => {
+      setEnable(data.enable);
+      setMode(data.mode);
+      setNameservers(data.nameservers.join("\n"));
+      setFallbackDns(data.fallback_dns.join("\n"));
+      setFakeIpFilter(data.fake_ip_filter.join("\n"));
+      setUseHosts(data.use_hosts);
+      setEnhancedMode(data.enhanced_mode);
+    });
   }, [data]);
 
   const handleSave = () => {

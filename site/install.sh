@@ -6,7 +6,8 @@
 # on a Debian/Ubuntu host using systemd.
 #
 # Requirements: curl, tar, systemd
-# Usage: sudo bash install.sh [--uninstall] [--port PORT]
+# Usage: curl -fsSL https://fluxo.click | sudo bash
+#        curl -fsSL https://fluxo.click | sudo bash -- --uninstall
 # ============================================================
 
 set -euo pipefail
@@ -32,7 +33,7 @@ MIHOMO_CONFIG_DIR="/etc/mihomo"
 MIHOMO_BINARY="/usr/local/bin/mihomo"
 WEB_PORT="${WEB_PORT:-8080}"
 SERVER_PORT="${SERVER_PORT:-8090}"
-REPO_URL="https://github.com/RaylenZed/fluxo"
+REPO_URL="https://github.com/RaylenZed/fluxo.click"
 MIHOMO_GITHUB="https://github.com/MetaCubeX/mihomo"
 
 # GitHub proxy — prepended to all github.com URLs (e.g. https://gh-proxy.com/)
@@ -101,7 +102,7 @@ ask_proxy() {
   if [[ ! -t 0 ]]; then
     log_detail "Running via pipe — skipping proxy prompt"
     log_detail "To use a proxy, run:"
-    log_detail "  curl -fsSL fluxo.click/install.sh | sudo GH_PROXY=https://gh-proxy.com/ bash"
+    log_detail "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://gh-proxy.com/ bash"
     echo ""
     return 0
   fi
@@ -127,7 +128,7 @@ ask_proxy() {
 check_root() {
   log_step "Checking privileges"
   if [[ $EUID -ne 0 ]]; then
-    die "This script must be run as root. Try: sudo bash install.sh"
+    die "This script must be run as root. Try: curl -fsSL https://fluxo.click | sudo bash"
   fi
   log_info "Running as root"
 }
@@ -667,7 +668,7 @@ case "${1:-install}" in
     uninstall
     ;;
   --help|-h|help)
-    echo "Usage: sudo bash install.sh [--uninstall] [--port PORT]"
+    echo "Usage: curl -fsSL https://fluxo.click | sudo bash"
     echo ""
     echo "Environment variables:"
     echo "  MIHOMO_VERSION   Mihomo version to install (default: v1.19.10)"
@@ -676,14 +677,14 @@ case "${1:-install}" in
     echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)"
     echo ""
     echo "Examples:"
-    echo "  # Interactive (will ask for proxy)"
-    echo "  sudo bash install.sh"
+    echo "  # Standard install"
+    echo "  curl -fsSL https://fluxo.click | sudo bash"
     echo ""
-    echo "  # With proxy set via env (no prompt)"
-    echo "  GH_PROXY=https://gh-proxy.com/ sudo bash install.sh"
+    echo "  # With GitHub proxy (for regions with slow GitHub access)"
+    echo "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://gh-proxy.com/ bash"
     echo ""
-    echo "  # One-liner with proxy (pass GH_PROXY to sudo, not curl)"
-    echo "  curl -fsSL fluxo.click/install.sh | sudo GH_PROXY=https://gh-proxy.com/ bash"
+    echo "  # Uninstall"
+    echo "  curl -fsSL https://fluxo.click | sudo bash -- --uninstall"
     echo ""
     ;;
   *)

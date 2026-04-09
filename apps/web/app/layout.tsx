@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning className="h-full">
-      <body className="h-full antialiased">
+      <body className="h-full antialiased bg-[var(--canvas)]">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <LocaleProvider>
             <QueryProvider>

@@ -44,9 +44,18 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/config/apply', async (_req, reply) => {
     try {
       const configPath = getConfigPath();
-      const apiHost = (getSetting('mihomo.external_controller') as string) || '127.0.0.1:9090';
-      const mihomoApiUrl = `http://${apiHost}`;
-      const mihomoSecret = (getSetting('mihomo.secret') as string) || undefined;
+      // Honour MIHOMO_API_URL env var (Docker / systemd override) first,
+      // falling back to the DB-stored external_controller setting.
+      let mihomoApiUrl: string;
+      let mihomoSecret: string | undefined;
+      if (process.env.MIHOMO_API_URL) {
+        mihomoApiUrl = process.env.MIHOMO_API_URL;
+        mihomoSecret = process.env.MIHOMO_SECRET || undefined;
+      } else {
+        const apiHost = (getSetting('mihomo.external_controller') as string) || '127.0.0.1:9090';
+        mihomoApiUrl = `http://${apiHost}`;
+        mihomoSecret = (getSetting('mihomo.secret') as string) || undefined;
+      }
       await writeConfigAndReload(configPath, mihomoApiUrl, mihomoSecret);
       return { ok: true, configPath };
     } catch (err) {

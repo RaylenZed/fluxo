@@ -1,8 +1,7 @@
 "use client";
-import { Moon, Sun, Bell } from "lucide-react";
+import { Moon, Sun, Bell, Search, Zap } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/lib/i18n/context";
@@ -21,11 +20,12 @@ function useTunState() {
   });
   const toggle = useMutation({
     mutationFn: async (enable: boolean) => {
-      await fetch(`/api/mihomo/tun`, {
+      const res = await fetch(`/api/mihomo/tun`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enable }),
       });
+      if (!res.ok) throw new Error('Failed to toggle TUN');
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tun-state"] });
@@ -76,21 +76,34 @@ export function Topbar({ title, description, children }: TopbarProps) {
   const { tunEnabled, toggle } = useTunState();
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 bg-[var(--background)]/80 backdrop-blur-md px-6 border-b border-[var(--border)]">
-      {/* Title */}
-      <div className="flex items-center gap-3 min-w-0">
-        <h1 className="text-base font-semibold text-[var(--foreground)] truncate">{title}</h1>
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-3 bg-[var(--background)]/90 backdrop-blur-md px-5 border-b border-[var(--border)]">
+      {/* Page title */}
+      <div className="flex items-center gap-2 min-w-[140px] shrink-0">
+        <h1 className="text-[15px] font-bold text-[var(--foreground)] truncate">{title}</h1>
         {description && (
-          <span className="hidden sm:block text-xs text-[var(--muted)] truncate">{description}</span>
+          <span className="hidden lg:block text-xs text-[var(--muted)] truncate">{description}</span>
         )}
       </div>
 
+      {/* Search bar — center, flex-1 */}
+      <div className="flex-1 mx-2 hidden sm:block">
+        <div className="flex items-center gap-2.5 h-10 rounded-full bg-[var(--surface-2)] border border-[var(--border)] px-4 max-w-[480px] mx-auto">
+          <Search className="h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0" />
+          <input
+            type="text"
+            placeholder={t.topbar.searchPlaceholder}
+            className="flex-1 bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] outline-none"
+            readOnly
+          />
+        </div>
+      </div>
+
       {/* Right actions */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
         {children}
 
-        {/* TUN toggle — system proxy not applicable for server deployments */}
-        <div className="hidden md:flex items-center gap-2 pl-2 border-l border-[var(--border)]">
+        {/* TUN toggle */}
+        <div className="hidden md:flex items-center gap-2 pr-2 border-r border-[var(--border)]">
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <span className="text-xs text-[var(--muted)] font-medium">{t.topbar.enhanced}</span>
             <Switch
@@ -101,23 +114,29 @@ export function Topbar({ title, description, children }: TopbarProps) {
           </label>
         </div>
 
-        {/* Theme toggle */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
+        {/* Theme toggle — circular */}
+        <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="text-[var(--muted)]"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-all"
+          aria-label={t.topbar.toggleTheme}
         >
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">{t.topbar.toggleTheme}</span>
-        </Button>
+        </button>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon-sm" className="relative text-[var(--muted)]">
+        {/* Notifications — circular */}
+        <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-all">
           <Bell className="h-4 w-4" />
-          <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-[var(--brand-500)]" />
-        </Button>
+          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[var(--brand-500)] border-2 border-[var(--surface)]" />
+        </button>
+
+        {/* User profile chip */}
+        <div className="flex items-center gap-2 h-10 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-1.5 pr-3 ml-1">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-500)] shrink-0">
+            <Zap className="h-3.5 w-3.5 text-white" />
+          </div>
+          <span className="text-sm font-semibold text-[var(--foreground)] hidden sm:block">Admin</span>
+        </div>
       </div>
     </header>
   );

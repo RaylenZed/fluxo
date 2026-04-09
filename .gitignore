@@ -32,3 +32,12 @@ Thumbs.db
 # Turbo
 .turbo/
 .playwright-cli/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Additional env files
+.env.development
+.env.test

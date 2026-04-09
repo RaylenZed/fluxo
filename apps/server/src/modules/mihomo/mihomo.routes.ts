@@ -123,7 +123,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const headers = getHeaders(secret);
       const res = await axios.get(`${apiUrl}/proxies`, { headers, timeout: 5000 });
       return res.data;
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to fetch proxies from Mihomo');
       reply.code(503).send({ error: 'Mihomo not reachable' });
     }
   });
@@ -149,14 +150,15 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
           if (match) {
             clearTimeout(timer);
             controller.abort();
-            try { reply.send(JSON.parse(match[1])); } catch { reply.send({ inuse: 0 }); }
+            try { reply.send(JSON.parse(match[1])); } catch (err) { fastify.log.warn({ err }, 'Failed to parse memory payload'); reply.send({ inuse: 0 }); }
             resolve();
           }
         });
         res.data.on('error', () => { clearTimeout(timer); reply.code(503).send({ error: 'stream error' }); resolve(); });
         res.data.on('end', () => { clearTimeout(timer); if (!reply.sent) reply.send({ inuse: 0 }); resolve(); });
       });
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to stream memory from Mihomo');
       reply.code(503).send({ error: 'Mihomo not reachable' });
     }
   });
@@ -169,7 +171,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const since = new Date(out).getTime();
       const seconds = Math.floor((Date.now() - since) / 1000);
       return { uptime: seconds };
-    } catch {
+    } catch (err) {
+      fastify.log.warn({ err }, 'Failed to read mihomo uptime via systemctl');
       return { uptime: null };
     }
   });
@@ -186,7 +189,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
         { headers: getHeaders(secret), timeout: timeout + 1000 }
       );
       return res.data; // { delay: number }
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Proxy delay test failed');
       reply.code(503).send({ error: 'Test failed' });
     }
   });
@@ -203,7 +207,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
         { headers: getHeaders(secret), timeout: 5000 }
       );
       return { ok: true };
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to switch proxy in group');
       reply.code(503).send({ error: 'Mihomo not reachable' });
     }
   });
@@ -215,7 +220,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const { apiUrl, secret } = getMihomoConfig();
       await axios.patch(`${apiUrl}/configs`, { mode: body.mode }, { headers: getHeaders(secret), timeout: 5000 });
       return { ok: true };
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to set mihomo mode');
       reply.code(503).send({ error: 'Mihomo not reachable' });
     }
   });
@@ -249,7 +255,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
         { headers: getHeaders(secret), timeout: 10000 }
       );
       return { ok: true };
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to update provider');
       reply.code(503).send({ error: 'Mihomo not reachable or provider not found' });
     }
   }
@@ -262,7 +269,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const { apiUrl, secret } = getMihomoConfig();
       await axios.post(`${apiUrl}/configs/geo`, {}, { headers: getHeaders(secret), timeout: 30000 });
       return { ok: true };
-    } catch {
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to trigger geo update');
       reply.code(503).send({ error: 'Mihomo not reachable' });
     }
   });

@@ -48,6 +48,7 @@ const translations = {
       systemProxy: 'System Proxy',
       enhanced: 'Enhanced',
       toggleTheme: 'Toggle theme',
+      searchPlaceholder: 'Search nodes, rules, profiles…',
     },
     // ── Dashboard page ───────────────────────────────────────────────────
     dashboard: {
@@ -237,6 +238,14 @@ const translations = {
     dashboardExtra: {
       subtitle: 'Real-time network monitoring',
       mihomo: 'Mihomo',
+      heroTag: 'MIHOMO CONTROL',
+      heroTitle: 'Sharpen Your Network,\nMaster Your Traffic',
+      heroSub: 'Intelligent proxy rules, real-time monitoring, zero friction.',
+      heroCta: 'Open Panel',
+      heroStatLabel: 'Statistics',
+      heroQuickActions: 'Quick Actions',
+      heroRestart: 'Restart Mihomo',
+      heroUpdateRules: 'Update Rules',
     },
     // ── Profiles page ────────────────────────────────────────────────────
     profiles: {
@@ -652,6 +661,7 @@ const translations = {
       systemProxy: '系统代理',
       enhanced: '增强模式',
       toggleTheme: '切换主题',
+      searchPlaceholder: '搜索节点、规则、配置…',
     },
     // ── 仪表板 ───────────────────────────────────────────────────────────
     dashboard: {
@@ -841,6 +851,14 @@ const translations = {
     dashboardExtra: {
       subtitle: '实时网络监控',
       mihomo: 'Mihomo',
+      heroTag: 'MIHOMO 控制台',
+      heroTitle: '掌控网络，\n优化每一次连接',
+      heroSub: '智能代理规则，实时监控，零摩擦体验。',
+      heroCta: '打开面板',
+      heroStatLabel: '统计数据',
+      heroQuickActions: '快捷操作',
+      heroRestart: '重启 Mihomo',
+      heroUpdateRules: '更新规则',
     },
     // ── 配置页 ───────────────────────────────────────────────────────────
     profiles: {

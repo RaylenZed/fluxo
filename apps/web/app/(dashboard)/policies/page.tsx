@@ -107,9 +107,11 @@ function GroupCard({
     parsedProxies = [];
   }
 
-  const selectedProxy = parsedProxies[0] ?? "DIRECT";
-  const selectedNode = proxyNodes.find((n) => n.name === selectedProxy);
+  // Local selected state — updated optimistically when user picks a node.
+  // Initialized from first available proxy; reflects runtime selection immediately.
+  const [selectedProxy, setSelectedProxy] = useState(parsedProxies[0] ?? "DIRECT");
 
+  const selectedNode = proxyNodes.find((n) => n.name === selectedProxy);
   let selectedLatency = 0;
   if (selectedNode) {
     try {
@@ -117,6 +119,19 @@ function GroupCard({
       if (typeof cfg.latency === "number") selectedLatency = cfg.latency;
     } catch {
       selectedLatency = 0;
+    }
+  }
+
+  async function switchProxy(name: string) {
+    setSelectedProxy(name); // optimistic
+    const res = await fetch(`/api/mihomo/proxies/${encodeURIComponent(group.name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      // Revert if the API call failed
+      setSelectedProxy(selectedProxy);
     }
   }
 
@@ -167,13 +182,7 @@ function GroupCard({
           <NodeCard
             node={{ name: "DIRECT", type: "builtin", latency: 0 }}
             selected={selectedProxy === "DIRECT"}
-            onClick={async () => {
-              await fetch(`/api/mihomo/proxies/${encodeURIComponent(group.name)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: "DIRECT" }),
-              }).catch(() => {});
-            }}
+            onClick={() => void switchProxy("DIRECT")}
           />
           {proxyNodes.map((node) => {
             let latency = 0;
@@ -188,13 +197,7 @@ function GroupCard({
                 key={node.id}
                 node={{ name: node.name, type: node.type, latency }}
                 selected={selectedProxy === node.name}
-                onClick={async () => {
-                  await fetch(`/api/mihomo/proxies/${encodeURIComponent(group.name)}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: node.name }),
-                  }).catch(() => {});
-                }}
+                onClick={() => void switchProxy(node.name)}
               />
             );
           })}

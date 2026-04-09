@@ -12,6 +12,7 @@
   --brand-700: #5b21b6;
 
   /* Layout colors */
+  --canvas: #d8dce8;
   --background: #f0f2f8;
   --surface: #ffffff;
   --surface-2: #f8f9fc;
@@ -26,6 +27,7 @@
 }
 
 .dark {
+  --canvas: #080a0f;
   --background: #0d0f14;
   --surface: #161922;
   --surface-2: #1c2030;
@@ -40,6 +42,7 @@
 }
 
 @theme inline {
+  --color-canvas: var(--canvas);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);

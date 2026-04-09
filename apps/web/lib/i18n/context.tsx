@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import translations, { type Locale, type TranslationKeys } from './translations';
 
 const STORAGE_KEY = 'fluxo-locale';
@@ -19,14 +19,12 @@ const LocaleContext = createContext<LocaleContextValue>({
 });
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
-
-  useEffect(() => {
+  // Lazy initializer: read from localStorage on first render (client-only).
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window === 'undefined') return DEFAULT_LOCALE;
     const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
-    if (stored === 'en' || stored === 'zh') {
-      setLocaleState(stored);
-    }
-  }, []);
+    return stored === 'en' || stored === 'zh' ? stored : DEFAULT_LOCALE;
+  });
 
   const setLocale = (l: Locale) => {
     setLocaleState(l);

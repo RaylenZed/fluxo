@@ -71,7 +71,7 @@ pnpm dev  # Web: http://localhost:38080 | API: http://localhost:8090
 ### Production — Direct Install (Debian/Ubuntu)
 
 ```bash
-curl -fsSL fluxo.click/install.sh | sudo bash
+curl -fsSL https://fluxo.click | sudo bash
 ```
 
 安装后自动创建两个 systemd 服务：

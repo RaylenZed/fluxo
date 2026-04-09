@@ -1,11 +1,10 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Search, X, Pause, Play, ChevronDown, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
@@ -134,16 +133,13 @@ export default function ActivityPage() {
   const { t } = useLocale();
   const liveState = useRealtimeConnections();
   const [paused, setPaused] = useState(false);
+  const [snapshot, setSnapshot] = useState(liveState);
   const [search, setSearch] = useState("");
   const [policyFilter, setPolicyFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
 
-  // When paused, keep a snapshot
-  const snapshotRef = useRef(liveState);
-  if (!paused) {
-    snapshotRef.current = liveState;
-  }
-  const state = snapshotRef.current;
+  // Use snapshot when paused, live data otherwise
+  const state = paused ? snapshot : liveState;
 
   const allConnections = state.connections.map(mapConnection);
 
@@ -183,7 +179,7 @@ export default function ActivityPage() {
           <X className="h-3.5 w-3.5" />
           Close All
         </Button>
-        <Button size="sm" variant="outline" className="text-xs gap-1.5" onClick={() => setPaused((v) => !v)}>
+        <Button size="sm" variant="outline" className="text-xs gap-1.5" onClick={() => { if (!paused) setSnapshot(liveState); setPaused((v) => !v); }}>
           {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
           {paused ? "Resume" : "Pause"}
         </Button>
