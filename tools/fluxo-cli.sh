@@ -13,8 +13,8 @@ SERVICE_NAME="mihomo"
 LATEST_VERSION_API="https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
 SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_VERSION="3.0.0"
-SCRIPT_RAW_URL="https://raw.githubusercontent.com/RaylenZed/fluxo/main/tools/fluxo-cli.sh"
-SCRIPT_VERSION_URL="https://raw.githubusercontent.com/RaylenZed/fluxo/main/tools/version"
+SCRIPT_RAW_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/fluxo-cli.sh"
+SCRIPT_VERSION_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/version"
 
 # GitHub proxy — set GH_PROXY env var or configure via menu
 GH_PROXY="${GH_PROXY:-}"
