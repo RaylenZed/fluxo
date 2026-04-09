@@ -1,3 +1,4 @@
+import '@fastify/cookie';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   isSetupRequired,
