@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { execSync } from 'child_process';
+import net from 'net';
 import axios from 'axios';
 import { getDb } from '../../database/db';
 import { writeConfigAndReload } from '../config/config.generator';
@@ -174,6 +175,24 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       fastify.log.warn({ err }, 'Failed to read mihomo uptime via systemctl');
       return { uptime: null };
+    }
+  });
+
+  // POST /api/mihomo/tcpping — TCP connectivity check to a host:port
+  fastify.post('/mihomo/tcpping', async (req) => {
+    const { server, port, timeout = 5000 } = req.body as { server: string; port: number; timeout?: number };
+    try {
+      const latencyMs = await new Promise<number>((resolve, reject) => {
+        const start = Date.now();
+        const socket = net.createConnection({ host: server, port });
+        socket.setTimeout(timeout);
+        socket.on('connect', () => { socket.destroy(); resolve(Date.now() - start); });
+        socket.on('timeout', () => { socket.destroy(); reject(new Error('Connection timed out')); });
+        socket.on('error', (err) => { socket.destroy(); reject(err); });
+      });
+      return { ok: true, latencyMs };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
     }
   });
 

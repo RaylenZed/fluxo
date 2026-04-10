@@ -123,6 +123,7 @@ function GroupCard({
   }
 
   async function switchProxy(name: string) {
+    const prev = selectedProxy;
     setSelectedProxy(name); // optimistic
     const res = await fetch(`/api/mihomo/proxies/${encodeURIComponent(group.name)}`, {
       method: "PUT",
@@ -130,8 +131,8 @@ function GroupCard({
       body: JSON.stringify({ name }),
     });
     if (!res.ok) {
-      // Revert if the API call failed
-      setSelectedProxy(selectedProxy);
+      setSelectedProxy(prev);
+      toast.error(t.policies.switchFailed);
     }
   }
 

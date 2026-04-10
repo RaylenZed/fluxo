@@ -632,9 +632,25 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
     toast.success(pT.parsedFrom);
   }
 
-  function handleTest() {
+  async function handleTest() {
     setTesting(true);
-    setTimeout(() => setTesting(false), 1500);
+    try {
+      const res = await fetch('/api/mihomo/tcpping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ server: server.trim(), port: parseInt(port, 10), timeout: 5000 }),
+      });
+      const data = await res.json() as { ok: boolean; latencyMs?: number; error?: string };
+      if (data.ok) {
+        toast.success(`${server}:${port} — ${data.latencyMs}ms`);
+      } else {
+        toast.error(`${server}:${port} — ${data.error ?? 'unreachable'}`);
+      }
+    } catch {
+      toast.error(`${server}:${port} — unreachable`);
+    } finally {
+      setTesting(false);
+    }
   }
 
   return (
