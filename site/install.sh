@@ -360,25 +360,40 @@ install_fluxo() {
 
   mkdir -p "$INSTALL_DIR"
 
-  # Use git clone only when no proxy is set (gh-proxy.com doesn't support git protocol)
+  # Use tarball download when GH_PROXY is set (gh-proxy.com doesn't support git protocol);
+  # also fall back to tarball if git clone fails (common on CN servers with GitHub instability).
+  local clone_ok=false
   if [[ -z "$GH_PROXY" ]] && command -v git &>/dev/null; then
     log_detail "Cloning repository..."
-    git clone --depth=1 "${REPO_URL}" "$INSTALL_DIR" 2>&1 | \
-      grep -E "Cloning|done" | while read -r line; do log_detail "$line"; done
-  else
+    if git clone --depth=1 "${REPO_URL}" "$INSTALL_DIR" 2>&1; then
+      clone_ok=true
+    else
+      log_warn "git clone failed — falling back to tarball download"
+      log_detail "Tip: set GH_PROXY=https://gh-proxy.com/ to speed up downloads in CN regions"
+      rm -rf "$INSTALL_DIR"
+      mkdir -p "$INSTALL_DIR"
+    fi
+  fi
+
+  if ! $clone_ok; then
     log_detail "Downloading release tarball..."
     local tarball_url
     tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
     tmptar="$(mktemp)"
-    curl -fsSL --progress-bar -o "$tmptar" "$tarball_url"
+    curl -fsSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://gh-proxy.com/"
     tar -xzf "$tmptar" --strip-components=1 -C "$INSTALL_DIR"
     rm -f "$tmptar"
   fi
 
   log_detail "Installing dependencies..."
   cd "$INSTALL_DIR"
-  pnpm install --frozen-lockfile 2>&1 | tail -3 | while read -r line; do log_detail "$line"; done
+  # Allow overriding npm registry (useful for CN servers: NPM_REGISTRY=https://registry.npmmirror.com)
+  if [[ -n "${NPM_REGISTRY:-}" ]]; then
+    log_detail "Using npm registry: ${NPM_REGISTRY}"
+    pnpm config set registry "$NPM_REGISTRY" --location project
+  fi
+  pnpm install --frozen-lockfile 2>&1 | tail -5 | while read -r line; do log_detail "$line"; done
 
   log_detail "Building applications..."
   pnpm turbo build 2>&1 | grep -E "✓|error|warn" | head -20 | while read -r line; do log_detail "$line"; done
@@ -659,6 +674,7 @@ run_installer() {
   echo -e "  Install dir      : ${CYAN}${INSTALL_DIR}${NC}"
   echo -e "  Data dir         : ${CYAN}${DATA_DIR}${NC}"
   echo -e "  GitHub proxy     : ${CYAN}${GH_PROXY:-（none）}${NC}"
+  echo -e "  npm registry     : ${CYAN}${NPM_REGISTRY:-（default）}${NC}"
   echo -e ""
 
   check_root
@@ -691,7 +707,8 @@ case "${1:-install}" in
     echo "  MIHOMO_VERSION   Mihomo version to install (default: v1.19.10)"
     echo "  WEB_PORT         Web UI port (default: 8080)"
     echo "  SERVER_PORT      API server port (default: 8090)"
-    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)"
+    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)
+  NPM_REGISTRY     npm registry URL (e.g. https://registry.npmmirror.com for CN)"
     echo ""
     echo "Examples:"
     echo "  # Standard install"
