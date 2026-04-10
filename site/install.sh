@@ -471,6 +471,7 @@ WorkingDirectory=${web_standalone}
 Environment=NODE_ENV=production
 Environment=PORT=${WEB_PORT}
 Environment=HOSTNAME=0.0.0.0
+Environment=BACKEND_URL=http://127.0.0.1:${SERVER_PORT}
 ExecStart=${node_bin} ${web_standalone}/server.js
 Restart=on-failure
 RestartSec=5s
@@ -574,14 +575,17 @@ show_summary() {
   echo -e "  SOCKS5 proxy     : ${ip}:7891"
   echo -e ""
   echo -e "${BOLD}  Useful commands:${NC}"
-  echo -e "  ${CYAN}fluxo-cli${NC}                         — interactive CLI (Mihomo + Tailscale + Docker)"
+  echo -e "  ${CYAN}fluxo-cli${NC}                         — interactive CLI (Mihomo management)"
   echo -e "  ${CYAN}fluxo-cli status${NC}                  — quick status"
   echo -e "  ${CYAN}fluxo-cli test${NC}                    — network connectivity test"
   echo -e "  ${CYAN}systemctl status mihomo${NC}           — core status"
-  echo -e "  ${CYAN}systemctl status fluxo${NC}            — dashboard status"
+  echo -e "  ${CYAN}systemctl status fluxo${NC}            — API server status"
+  echo -e "  ${CYAN}systemctl status fluxo-web${NC}        — web UI status"
   echo -e "  ${CYAN}journalctl -fu mihomo${NC}             — core logs (live)"
-  echo -e "  ${CYAN}journalctl -fu fluxo${NC}              — dashboard logs (live)"
-  echo -e "  ${CYAN}bash install.sh --uninstall${NC}       — uninstall everything"
+  echo -e "  ${CYAN}journalctl -fu fluxo${NC}              — API server logs (live)"
+  echo -e "  ${CYAN}journalctl -fu fluxo-web${NC}          — web UI logs (live)"
+  echo -e "  ${CYAN}curl -fsSL https://fluxo.click | sudo bash -- --uninstall${NC}"
+  echo -e "                                    — uninstall everything"
   echo -e ""
   echo -e "${YELLOW}  Config file: ${MIHOMO_CONFIG_DIR}/config.yaml${NC}"
   echo -e "${YELLOW}  Edit your proxies and rules there, then reload:${NC}"
