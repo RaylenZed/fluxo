@@ -116,7 +116,7 @@ systemctl restart mihomo         # 重启核心
 #### 卸载
 
 ```bash
-curl -fsSL https://fluxo.click | sudo bash -- --uninstall
+curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall
 ```
 
 > 卸载会删除 Mihomo 二进制、Fluxo 应用及数据库，**Mihomo 配置文件 `/etc/mihomo/` 会保留**。
@@ -126,7 +126,7 @@ curl -fsSL https://fluxo.click | sudo bash -- --uninstall
 先卸载，再执行安装命令即可：
 
 ```bash
-curl -fsSL https://fluxo.click | sudo bash -- --uninstall
+curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall
 curl -fsSL https://fluxo.click | sudo bash
 ```
 

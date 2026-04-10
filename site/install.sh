@@ -7,7 +7,7 @@
 #
 # Requirements: curl, tar, systemd
 # Usage: curl -fsSL https://fluxo.click | sudo bash
-#        curl -fsSL https://fluxo.click | sudo bash -- --uninstall
+#        curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall
 # ============================================================
 
 set -euo pipefail
@@ -584,7 +584,7 @@ show_summary() {
   echo -e "  ${CYAN}journalctl -fu mihomo${NC}             — core logs (live)"
   echo -e "  ${CYAN}journalctl -fu fluxo${NC}              — API server logs (live)"
   echo -e "  ${CYAN}journalctl -fu fluxo-web${NC}          — web UI logs (live)"
-  echo -e "  ${CYAN}curl -fsSL https://fluxo.click | sudo bash -- --uninstall${NC}"
+  echo -e "  ${CYAN}curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall${NC}"
   echo -e "                                    — uninstall everything"
   echo -e ""
   echo -e "${YELLOW}  Config file: ${MIHOMO_CONFIG_DIR}/config.yaml${NC}"
@@ -688,7 +688,7 @@ case "${1:-install}" in
     echo "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://gh-proxy.com/ bash"
     echo ""
     echo "  # Uninstall"
-    echo "  curl -fsSL https://fluxo.click | sudo bash -- --uninstall"
+    echo "  curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall"
     echo ""
     ;;
   *)
