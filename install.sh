@@ -689,6 +689,23 @@ uninstall() {
 
   echo -e ""
   log_info "Uninstall complete."
+
+  # ── Summary: what's still on the system ──────────────────────────────────
+  local leftovers=()
+  [[ -f "/usr/local/bin/fluxo-cli" ]] && leftovers+=("  rm -f /usr/local/bin/fluxo-cli")
+  [[ -d "$MIHOMO_CONFIG_DIR"       ]] && leftovers+=("  rm -rf $MIHOMO_CONFIG_DIR")
+  [[ -d "$DATA_DIR"                ]] && leftovers+=("  rm -rf $DATA_DIR")
+  [[ -d "$INSTALL_DIR"             ]] && leftovers+=("  rm -rf $INSTALL_DIR")
+  command -v pnpm &>/dev/null          && leftovers+=("  npm uninstall -g pnpm")
+
+  if [[ ${#leftovers[@]} -gt 0 ]]; then
+    echo -e ""
+    echo -e "${YELLOW}${BOLD}  The following were kept. Run manually to fully clean up:${NC}"
+    for cmd in "${leftovers[@]}"; do
+      echo -e "${CYAN}${cmd}${NC}"
+    done
+  fi
+
   echo -e ""
 }
 
