@@ -625,13 +625,7 @@ uninstall() {
   log_banner
   log_step "Uninstalling Fluxo"
 
-  echo -e "${RED}${BOLD}  WARNING: This will remove:${NC}"
-  echo -e "  • Mihomo binary ($MIHOMO_BINARY)"
-  echo -e "  • Fluxo ($INSTALL_DIR)"
-  echo -e "  • Fluxo data ($DATA_DIR)"
-  echo -e "  • Systemd services"
-  echo -e ""
-  echo -e "${YELLOW}  Mihomo config ($MIHOMO_CONFIG_DIR) will be preserved.${NC}"
+  echo -e "${YELLOW}  You will be asked what to remove. Services will always be stopped.${NC}"
   echo -e ""
 
   if ! confirm "Proceed with uninstall?"; then
@@ -639,7 +633,8 @@ uninstall() {
     exit 0
   fi
 
-  # Stop and disable services
+  # ── Always: stop and disable services ────────────────────────────────────
+  log_step "Stopping and removing services"
   for svc in fluxo-web fluxo mihomo; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
       log_detail "Stopping $svc..."
@@ -651,17 +646,49 @@ uninstall() {
     rm -f "/etc/systemd/system/${svc}.service"
     log_info "Removed service: $svc"
   done
-
   systemctl daemon-reload
 
-  # Remove binaries and app
-  [[ -f "$MIHOMO_BINARY" ]] && rm -f "$MIHOMO_BINARY"  && log_info "Removed: $MIHOMO_BINARY"
-  [[ -d "$INSTALL_DIR"   ]] && rm -rf "$INSTALL_DIR"   && log_info "Removed: $INSTALL_DIR"
-  [[ -d "$DATA_DIR"      ]] && rm -rf "$DATA_DIR"       && log_info "Removed: $DATA_DIR"
+  # ── Fluxo app ─────────────────────────────────────────────────────────────
+  echo -e ""
+  echo -e "  ${BOLD}Fluxo app${NC} — ${CYAN}${INSTALL_DIR}${NC}"
+  if confirm "Remove Fluxo application files?"; then
+    [[ -d "$INSTALL_DIR" ]] && rm -rf "$INSTALL_DIR" && log_info "Removed: $INSTALL_DIR"
+    [[ -f "/usr/local/bin/fluxo-cli" ]] && rm -f "/usr/local/bin/fluxo-cli" && log_info "Removed: /usr/local/bin/fluxo-cli"
+  else
+    log_detail "Skipped: $INSTALL_DIR"
+  fi
+
+  # ── Fluxo data (database, profiles, rules) ────────────────────────────────
+  echo -e ""
+  echo -e "  ${BOLD}Fluxo data${NC} — ${CYAN}${DATA_DIR}${NC}"
+  echo -e "  ${YELLOW}  Contains: database, profiles, rules, settings, password hash${NC}"
+  if confirm "Remove Fluxo data directory? (password and all config will be lost)"; then
+    [[ -d "$DATA_DIR" ]] && rm -rf "$DATA_DIR" && log_info "Removed: $DATA_DIR"
+  else
+    log_detail "Skipped: $DATA_DIR (data preserved)"
+  fi
+
+  # ── Mihomo binary ─────────────────────────────────────────────────────────
+  echo -e ""
+  echo -e "  ${BOLD}Mihomo binary${NC} — ${CYAN}${MIHOMO_BINARY}${NC}"
+  if confirm "Remove Mihomo binary?"; then
+    [[ -f "$MIHOMO_BINARY" ]] && rm -f "$MIHOMO_BINARY" && log_info "Removed: $MIHOMO_BINARY"
+  else
+    log_detail "Skipped: $MIHOMO_BINARY"
+  fi
+
+  # ── Mihomo config ─────────────────────────────────────────────────────────
+  echo -e ""
+  echo -e "  ${BOLD}Mihomo config${NC} — ${CYAN}${MIHOMO_CONFIG_DIR}${NC}"
+  echo -e "  ${YELLOW}  Contains: config.yaml, GeoIP/GeoSite databases${NC}"
+  if confirm "Remove Mihomo config directory?"; then
+    [[ -d "$MIHOMO_CONFIG_DIR" ]] && rm -rf "$MIHOMO_CONFIG_DIR" && log_info "Removed: $MIHOMO_CONFIG_DIR"
+  else
+    log_detail "Skipped: $MIHOMO_CONFIG_DIR (preserved)"
+  fi
 
   echo -e ""
-  log_info "${GREEN}Uninstall complete. Mihomo config preserved at ${MIHOMO_CONFIG_DIR}${NC}"
-
+  log_info "Uninstall complete."
   echo -e ""
 }
 
