@@ -29,12 +29,13 @@ export function createProxy(data: {
 
 export function updateProxy(
   id: string,
-  data: Partial<{ name: string; server: string; port: number; config: Record<string, unknown> }>
+  data: Partial<{ name: string; type: string; server: string; port: number; config: Record<string, unknown> }>
 ) {
   const now = new Date().toISOString();
   const sets: string[] = ['updated_at = ?'];
   const vals: unknown[] = [now];
   if (data.name !== undefined) { sets.push('name = ?'); vals.push(data.name); }
+  if (data.type !== undefined) { sets.push('type = ?'); vals.push(data.type); }
   if (data.server !== undefined) { sets.push('server = ?'); vals.push(data.server); }
   if (data.port !== undefined) { sets.push('port = ?'); vals.push(data.port); }
   if (data.config !== undefined) { sets.push('config = ?'); vals.push(JSON.stringify(data.config)); }

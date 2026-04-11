@@ -212,12 +212,12 @@ function PasswordInput({ value, onChange, placeholder }: { value: string; onChan
   );
 }
 
-function TLSOptions({ iv = {} }: { iv?: IV }) {
+function TLSOptions({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [sni, setSni] = useState(iv.sni ?? "");
-  const [skipCert, setSkipCert] = useState(iv.skipCert === "true");
   const [open, setOpen] = useState(false);
+  const sni = iv.sni ?? "";
+  const skipCert = iv.skipCert === "true";
   return (
     <div className="rounded-[12px] border border-[var(--border)] overflow-hidden">
       <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[var(--foreground)] bg-[var(--surface-2)] hover:bg-[var(--surface)] transition-colors">
@@ -226,10 +226,10 @@ function TLSOptions({ iv = {} }: { iv?: IV }) {
       </button>
       {open && (
         <div className="px-3 pt-3 pb-3 space-y-3 bg-[var(--surface)]">
-          <Field label={pT.sni}><Input value={sni} onChange={(e) => setSni(e.target.value)} placeholder="e.g. example.com" /></Field>
+          <Field label={pT.sni}><Input value={sni} onChange={(e) => onChange?.({ ...iv, sni: e.target.value })} placeholder="e.g. example.com" /></Field>
           <label className="flex items-center justify-between cursor-pointer">
             <span className="text-sm text-[var(--foreground)]">{pT.skipCertVerify}</span>
-            <Switch checked={skipCert} onCheckedChange={setSkipCert} />
+            <Switch checked={skipCert} onCheckedChange={(v) => onChange?.({ ...iv, skipCert: v ? "true" : "false" })} />
           </label>
         </div>
       )}
@@ -237,56 +237,50 @@ function TLSOptions({ iv = {} }: { iv?: IV }) {
   );
 }
 
-function HttpFields({ tls, iv = {} }: { tls: boolean; iv?: IV }) {
+function HttpFields({ tls, iv = {}, onChange }: { tls: boolean; iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState(iv.username ?? "");
-  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={pT.username}><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Optional" /></Field>
-        <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+        <Field label={pT.username}><Input value={iv.username ?? ""} onChange={(e) => onChange?.({ ...iv, username: e.target.value })} placeholder="Optional" /></Field>
+        <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       </div>
-      {tls && <TLSOptions iv={iv} />}
+      {tls && <TLSOptions iv={iv} onChange={onChange} />}
     </>
   );
 }
 
-function Socks5Fields({ tls, iv = {} }: { tls: boolean; iv?: IV }) {
+function Socks5Fields({ tls, iv = {}, onChange }: { tls: boolean; iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState(iv.username ?? "");
-  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={pT.username}><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Optional" /></Field>
-        <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+        <Field label={pT.username}><Input value={iv.username ?? ""} onChange={(e) => onChange?.({ ...iv, username: e.target.value })} placeholder="Optional" /></Field>
+        <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       </div>
-      {tls && <TLSOptions iv={iv} />}
+      {tls && <TLSOptions iv={iv} onChange={onChange} />}
     </>
   );
 }
 
-function SSFields({ iv = {} }: { iv?: IV }) {
+function SSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [cipher, setCipher] = useState(iv.cipher && SS_CIPHERS.includes(iv.cipher) ? iv.cipher : SS_CIPHERS[0]);
-  const [password, setPassword] = useState(iv.password ?? "");
-  const [plugin, setPlugin] = useState("__none__");
-  const [pluginOpts, setPluginOpts] = useState("");
+  const cipher = iv.cipher && SS_CIPHERS.includes(iv.cipher) ? iv.cipher : SS_CIPHERS[0];
+  const plugin = iv.plugin ?? "__none__";
   return (
     <>
       <Field label={pT.cipher}>
-        <Select value={cipher} onValueChange={setCipher}>
+        <Select value={cipher} onValueChange={(v) => onChange?.({ ...iv, cipher: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{SS_CIPHERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
-      <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+      <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       <Field label={pT.pluginOptional}>
-        <Select value={plugin} onValueChange={setPlugin}>
+        <Select value={plugin} onValueChange={(v) => onChange?.({ ...iv, plugin: v })}>
           <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
@@ -295,28 +289,24 @@ function SSFields({ iv = {} }: { iv?: IV }) {
           </SelectContent>
         </Select>
       </Field>
-      {plugin !== "__none__" && <Field label={pT.pluginOptions}><Input value={pluginOpts} onChange={(e) => setPluginOpts(e.target.value)} placeholder='e.g. obfs=http;obfs-host=bing.com' className="font-mono text-xs" /></Field>}
+      {plugin !== "__none__" && <Field label={pT.pluginOptions}><Input value={iv.pluginOpts ?? ""} onChange={(e) => onChange?.({ ...iv, pluginOpts: e.target.value })} placeholder='e.g. obfs=http;obfs-host=bing.com' className="font-mono text-xs" /></Field>}
     </>
   );
 }
 
-function VMessFields({ iv = {} }: { iv?: IV }) {
+function VMessFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState(iv.uuid ?? "");
-  const [alterId, setAlterId] = useState(iv.alterId ?? "0");
-  const [cipher, setCipher] = useState(iv.cipher && VMESS_CIPHERS.includes(iv.cipher) ? iv.cipher : "auto");
-  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
-  const [tls, setTls] = useState(iv.tls === "true");
-  const [wsPath, setWsPath] = useState(iv.wsPath ?? "/");
-  const [wsHeaders, setWsHeaders] = useState(iv.wsHeaders ?? "");
+  const cipher = iv.cipher && VMESS_CIPHERS.includes(iv.cipher) ? iv.cipher : "auto";
+  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
+  const tls = iv.tls === "true";
   return (
     <>
-      <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
+      <Field label={pT.uuid}><Input value={iv.uuid ?? ""} onChange={(e) => onChange?.({ ...iv, uuid: e.target.value })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={pT.alterId}><Input type="number" value={alterId} onChange={(e) => setAlterId(e.target.value)} /></Field>
+        <Field label={pT.alterId}><Input type="number" value={iv.alterId ?? "0"} onChange={(e) => onChange?.({ ...iv, alterId: e.target.value })} /></Field>
         <Field label={pT.cipher}>
-          <Select value={cipher} onValueChange={setCipher}>
+          <Select value={cipher} onValueChange={(v) => onChange?.({ ...iv, cipher: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{VMESS_CIPHERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
@@ -324,42 +314,41 @@ function VMessFields({ iv = {} }: { iv?: IV }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.network}>
-          <Select value={network} onValueChange={setNetwork}>
+          <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         <Field label="TLS">
           <div className="flex items-center h-9">
-            <Switch checked={tls} onCheckedChange={setTls} />
+            <Switch checked={tls} onCheckedChange={(v) => onChange?.({ ...iv, tls: v ? "true" : "false" })} />
             <span className="ml-2 text-sm text-[var(--muted)]">{tls ? pT.tlsEnabled : pT.tlsDisabled}</span>
           </div>
         </Field>
       </div>
       {network === "ws" && (
         <div className="grid grid-cols-2 gap-3">
-          <Field label={pT.wsPath}><Input value={wsPath} onChange={(e) => setWsPath(e.target.value)} placeholder="/" className="font-mono" /></Field>
-          <Field label={pT.wsHeaders}><Input value={wsHeaders} onChange={(e) => setWsHeaders(e.target.value)} placeholder='{"Host":"example.com"}' className="font-mono text-xs" /></Field>
+          <Field label={pT.wsPath}><Input value={iv.wsPath ?? "/"} onChange={(e) => onChange?.({ ...iv, wsPath: e.target.value })} placeholder="/" className="font-mono" /></Field>
+          <Field label={pT.wsHeaders}><Input value={iv.wsHeaders ?? ""} onChange={(e) => onChange?.({ ...iv, wsHeaders: e.target.value })} placeholder='{"Host":"example.com"}' className="font-mono text-xs" /></Field>
         </div>
       )}
-      {tls && <TLSOptions iv={iv} />}
+      {tls && <TLSOptions iv={iv} onChange={onChange} />}
     </>
   );
 }
 
-function VLESSFields({ iv = {} }: { iv?: IV }) {
+function VLESSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState(iv.uuid ?? "");
-  const [flow, setFlow] = useState(iv.flow || "__none__");
-  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
-  const [tls, setTls] = useState(iv.tls === "true");
+  const flow = iv.flow || "__none__";
+  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
+  const tls = iv.tls === "true";
   return (
     <>
-      <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
+      <Field label={pT.uuid}><Input value={iv.uuid ?? ""} onChange={(e) => onChange?.({ ...iv, uuid: e.target.value })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.flow}>
-          <Select value={flow} onValueChange={setFlow}>
+          <Select value={flow} onValueChange={(v) => onChange?.({ ...iv, flow: v })}>
             <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">None</SelectItem>
@@ -368,7 +357,7 @@ function VLESSFields({ iv = {} }: { iv?: IV }) {
           </Select>
         </Field>
         <Field label={pT.network}>
-          <Select value={network} onValueChange={setNetwork}>
+          <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
           </Select>
@@ -376,45 +365,41 @@ function VLESSFields({ iv = {} }: { iv?: IV }) {
       </div>
       <label className="flex items-center justify-between cursor-pointer">
         <span className="text-sm text-[var(--foreground)]">TLS</span>
-        <Switch checked={tls} onCheckedChange={setTls} />
+        <Switch checked={tls} onCheckedChange={(v) => onChange?.({ ...iv, tls: v ? "true" : "false" })} />
       </label>
-      {tls && <TLSOptions iv={iv} />}
+      {tls && <TLSOptions iv={iv} onChange={onChange} />}
     </>
   );
 }
 
-function TrojanFields({ iv = {} }: { iv?: IV }) {
+function TrojanFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState(iv.password ?? "");
-  const [network, setNetwork] = useState(iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp");
+  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
   return (
     <>
-      <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+      <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       <Field label={pT.network}>
-        <Select value={network} onValueChange={setNetwork}>
+        <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
-      <TLSOptions iv={iv} />
+      <TLSOptions iv={iv} onChange={onChange} />
     </>
   );
 }
 
-function SnellFields({ iv = {} }: { iv?: IV }) {
+function SnellFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [psk, setPsk] = useState(iv.psk ?? "");
-  const [version, setVersion] = useState(iv.version ?? "3");
-  const [obfs, setObfs] = useState(iv.obfs ?? "simple");
-  const [obfsHost, setObfsHost] = useState(iv.obfsHost ?? "");
+  const obfs = iv.obfs ?? "simple";
   return (
     <>
-      <Field label={pT.psk}><PasswordInput value={psk} onChange={setPsk} placeholder="Pre-shared key" /></Field>
+      <Field label={pT.psk}><PasswordInput value={iv.psk ?? ""} onChange={(v) => onChange?.({ ...iv, psk: v })} placeholder="Pre-shared key" /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.version}>
-          <Select value={version} onValueChange={setVersion}>
+          <Select value={iv.version ?? "3"} onValueChange={(v) => onChange?.({ ...iv, version: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="1">v1</SelectItem>
@@ -424,7 +409,7 @@ function SnellFields({ iv = {} }: { iv?: IV }) {
           </Select>
         </Field>
         <Field label={pT.obfs}>
-          <Select value={obfs} onValueChange={setObfs}>
+          <Select value={obfs} onValueChange={(v) => onChange?.({ ...iv, obfs: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="simple">simple</SelectItem>
@@ -433,64 +418,55 @@ function SnellFields({ iv = {} }: { iv?: IV }) {
           </Select>
         </Field>
       </div>
-      {obfs === "tls" && <Field label={pT.obfsHost}><Input value={obfsHost} onChange={(e) => setObfsHost(e.target.value)} placeholder="e.g. bing.com" /></Field>}
+      {obfs === "tls" && <Field label={pT.obfsHost}><Input value={iv.obfsHost ?? ""} onChange={(e) => onChange?.({ ...iv, obfsHost: e.target.value })} placeholder="e.g. bing.com" /></Field>}
     </>
   );
 }
 
-function TuicFields({ v5, iv = {} }: { v5?: boolean; iv?: IV }) {
+function TuicFields({ v5, iv = {}, onChange }: { v5?: boolean; iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [uuid, setUuid] = useState(iv.uuid ?? "");
-  const [password, setPassword] = useState(iv.password ?? "");
-  const [congestion, setCongestion] = useState(iv.congestion ?? "bbr");
-  const [udpRelay, setUdpRelay] = useState(iv.udpRelay ?? "native");
-  const [alpn, setAlpn] = useState(iv.alpn ?? "h3");
   return (
     <>
-      <Field label={pT.uuid}><Input value={uuid} onChange={(e) => setUuid(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
-      <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+      <Field label={pT.uuid}><Input value={iv.uuid ?? ""} onChange={(e) => onChange?.({ ...iv, uuid: e.target.value })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
+      <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.congestion}>
-          <Select value={congestion} onValueChange={setCongestion}>
+          <Select value={iv.congestion ?? "bbr"} onValueChange={(v) => onChange?.({ ...iv, congestion: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{CONGESTION.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         {v5 ? (
-          <Field label={pT.alpn}><Input value={alpn} onChange={(e) => setAlpn(e.target.value)} placeholder="h3" className="font-mono" /></Field>
+          <Field label={pT.alpn}><Input value={iv.alpn ?? "h3"} onChange={(e) => onChange?.({ ...iv, alpn: e.target.value })} placeholder="h3" className="font-mono" /></Field>
         ) : (
           <Field label={pT.udpRelayMode}>
-            <Select value={udpRelay} onValueChange={setUdpRelay}>
+            <Select value={iv.udpRelay ?? "native"} onValueChange={(v) => onChange?.({ ...iv, udpRelay: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{UDP_RELAY_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
         )}
       </div>
-      <TLSOptions iv={iv} />
+      <TLSOptions iv={iv} onChange={onChange} />
     </>
   );
 }
 
-function Hysteria2Fields({ iv = {} }: { iv?: IV }) {
+function Hysteria2Fields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState(iv.password ?? "");
-  const [obfs, setObfs] = useState(iv.obfs || "__none__");
-  const [obfsPassword, setObfsPassword] = useState(iv.obfsPassword ?? "");
-  const [up, setUp] = useState(iv.up ?? "");
-  const [down, setDown] = useState(iv.down ?? "");
+  const obfs = iv.obfs || "__none__";
   return (
     <>
-      <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+      <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={pT.upBandwidth}><Input type="number" value={up} onChange={(e) => setUp(e.target.value)} placeholder="e.g. 100" /></Field>
-        <Field label={pT.downBandwidth}><Input type="number" value={down} onChange={(e) => setDown(e.target.value)} placeholder="e.g. 200" /></Field>
+        <Field label={pT.upBandwidth}><Input type="number" value={iv.up ?? ""} onChange={(e) => onChange?.({ ...iv, up: e.target.value })} placeholder="e.g. 100" /></Field>
+        <Field label={pT.downBandwidth}><Input type="number" value={iv.down ?? ""} onChange={(e) => onChange?.({ ...iv, down: e.target.value })} placeholder="e.g. 200" /></Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label={pT.obfsType}>
-          <Select value={obfs} onValueChange={setObfs}>
+          <Select value={obfs} onValueChange={(v) => onChange?.({ ...iv, obfs: v })}>
             <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">None</SelectItem>
@@ -498,80 +474,68 @@ function Hysteria2Fields({ iv = {} }: { iv?: IV }) {
             </SelectContent>
           </Select>
         </Field>
-        {obfs === "salamander" && <Field label={pT.obfsPassword}><PasswordInput value={obfsPassword} onChange={setObfsPassword} placeholder="Obfs password" /></Field>}
+        {obfs === "salamander" && <Field label={pT.obfsPassword}><PasswordInput value={iv.obfsPassword ?? ""} onChange={(v) => onChange?.({ ...iv, obfsPassword: v })} placeholder="Obfs password" /></Field>}
       </div>
-      <TLSOptions iv={iv} />
+      <TLSOptions iv={iv} onChange={onChange} />
     </>
   );
 }
 
-function WireGuardFields({ iv = {} }: { iv?: IV }) {
+function WireGuardFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [ip, setIp] = useState(iv.ip ?? "");
-  const [privateKey, setPrivateKey] = useState(iv.privateKey ?? "");
-  const [publicKey, setPublicKey] = useState(iv.publicKey ?? "");
-  const [presharedKey, setPresharedKey] = useState(iv.presharedKey ?? "");
-  const [dns, setDns] = useState(iv.dns ?? "");
-  const [mtu, setMtu] = useState(iv.mtu ?? "1420");
-  const [reserved, setReserved] = useState(iv.reserved ?? "");
   return (
     <>
-      <Field label={pT.interfaceIp}><Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="10.0.0.2/32" className="font-mono" /></Field>
-      <Field label={pT.privateKey}><PasswordInput value={privateKey} onChange={setPrivateKey} placeholder="Base64 private key" /></Field>
-      <Field label={pT.publicKey}><Input value={publicKey} onChange={(e) => setPublicKey(e.target.value)} placeholder="Base64 public key" className="font-mono text-xs" /></Field>
-      <Field label={pT.presharedKey}><PasswordInput value={presharedKey} onChange={setPresharedKey} placeholder="Optional" /></Field>
+      <Field label={pT.interfaceIp}><Input value={iv.ip ?? ""} onChange={(e) => onChange?.({ ...iv, ip: e.target.value })} placeholder="10.0.0.2/32" className="font-mono" /></Field>
+      <Field label={pT.privateKey}><PasswordInput value={iv.privateKey ?? ""} onChange={(v) => onChange?.({ ...iv, privateKey: v })} placeholder="Base64 private key" /></Field>
+      <Field label={pT.publicKey}><Input value={iv.publicKey ?? ""} onChange={(e) => onChange?.({ ...iv, publicKey: e.target.value })} placeholder="Base64 public key" className="font-mono text-xs" /></Field>
+      <Field label={pT.presharedKey}><PasswordInput value={iv.presharedKey ?? ""} onChange={(v) => onChange?.({ ...iv, presharedKey: v })} placeholder="Optional" /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="DNS"><Input value={dns} onChange={(e) => setDns(e.target.value)} placeholder="1.1.1.1" className="font-mono" /></Field>
-        <Field label={pT.mtu}><Input type="number" value={mtu} onChange={(e) => setMtu(e.target.value)} /></Field>
+        <Field label="DNS"><Input value={iv.dns ?? ""} onChange={(e) => onChange?.({ ...iv, dns: e.target.value })} placeholder="1.1.1.1" className="font-mono" /></Field>
+        <Field label={pT.mtu}><Input type="number" value={iv.mtu ?? "1420"} onChange={(e) => onChange?.({ ...iv, mtu: e.target.value })} /></Field>
       </div>
-      <Field label={pT.reserved}><Input value={reserved} onChange={(e) => setReserved(e.target.value)} placeholder="e.g. 0,0,0" className="font-mono text-xs" /></Field>
+      <Field label={pT.reserved}><Input value={iv.reserved ?? ""} onChange={(e) => onChange?.({ ...iv, reserved: e.target.value })} placeholder="e.g. 0,0,0" className="font-mono text-xs" /></Field>
     </>
   );
 }
 
-function AnyTLSFields({ iv = {} }: { iv?: IV }) {
+function AnyTLSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [password, setPassword] = useState(iv.password ?? "");
   return (
     <>
-      <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
-      <TLSOptions iv={iv} />
+      <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
+      <TLSOptions iv={iv} onChange={onChange} />
     </>
   );
 }
 
-function SSHFields({ iv = {} }: { iv?: IV }) {
+function SSHFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const [username, setUsername] = useState(iv.username ?? "");
-  const [password, setPassword] = useState(iv.password ?? "");
-  const [privateKey, setPrivateKey] = useState(iv.privateKey ?? "");
-  const [hostKey, setHostKey] = useState(iv.hostKey ?? "");
-  const [useKey, setUseKey] = useState(false);
+  const [useKey, setUseKey] = useState(Boolean(iv.privateKey));
   return (
     <>
-      <Field label={pT.username}><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="root" /></Field>
+      <Field label={pT.username}><Input value={iv.username ?? ""} onChange={(e) => onChange?.({ ...iv, username: e.target.value })} placeholder="root" /></Field>
       <label className="flex items-center justify-between cursor-pointer">
         <span className="text-sm text-[var(--foreground)]">{pT.usePrivateKey}</span>
         <Switch checked={useKey} onCheckedChange={setUseKey} />
       </label>
       {useKey ? (
         <Field label={`${pT.privateKey} (PEM)`}>
-          <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
+          <textarea value={iv.privateKey ?? ""} onChange={(e) => onChange?.({ ...iv, privateKey: e.target.value })} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
             className={cn("w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]", "px-3 py-2 text-xs font-mono text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]", "focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] focus:border-transparent resize-none transition-all duration-150")} />
         </Field>
       ) : (
-        <Field label={pT.password}><PasswordInput value={password} onChange={setPassword} /></Field>
+        <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       )}
-      <Field label="Host Key (optional)"><Input value={hostKey} onChange={(e) => setHostKey(e.target.value)} placeholder="e.g. ssh-rsa AAAA..." className="font-mono text-xs" /></Field>
+      <Field label="Host Key (optional)"><Input value={iv.hostKey ?? ""} onChange={(e) => onChange?.({ ...iv, hostKey: e.target.value })} placeholder="e.g. ssh-rsa AAAA..." className="font-mono text-xs" /></Field>
     </>
   );
 }
 
-function ProtocolFields({ protocol, iv, fieldKey }: { protocol: Protocol; iv: IV; fieldKey: number }) {
-  const props = { iv, key: fieldKey };
+function ProtocolFields({ protocol, iv, onChange, fieldKey }: { protocol: Protocol; iv: IV; onChange: (v: IV) => void; fieldKey: number }) {
+  const props = { iv, onChange, key: fieldKey };
   switch (protocol) {
     case "HTTP":       return <HttpFields tls={false} {...props} />;
     case "HTTPS":      return <HttpFields tls={true} {...props} />;
@@ -701,7 +665,7 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
             <Field label={pT.port}><Input type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="443" /></Field>
           </div>
 
-          <ProtocolFields protocol={protocol} iv={iv} fieldKey={fieldKey} />
+          <ProtocolFields protocol={protocol} iv={iv} onChange={setIv} fieldKey={fieldKey} />
 
           <div className="h-px bg-[var(--border)]" />
 
@@ -738,7 +702,7 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
             {testing ? pT.testing : pT.testConnection}
           </Button>
           <Button variant="secondary" onClick={onClose}>{pT.cancel}</Button>
-          <Button onClick={() => { onSave?.({ name: name.trim(), type: protocol.toLowerCase(), server: server.trim(), port: parseInt(port, 10), config: { udp, tfo, remarks } }); onClose(); }} disabled={!name.trim() || !server.trim() || !port}>
+          <Button onClick={() => { onSave?.({ name: name.trim(), type: protocol.toLowerCase(), server: server.trim(), port: parseInt(port, 10), config: { ...iv, udp, tfo, remarks } }); }} disabled={!name.trim() || !server.trim() || !port}>
             {editNode ? pT.saveChanges : pT.saveNode}
           </Button>
         </DialogFooter>

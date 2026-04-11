@@ -67,7 +67,7 @@ export const proxiesApi = {
   list: () => request<ProxyRow[]>('/api/proxies'),
   create: (data: { name: string; type: string; server: string; port: number; config: Record<string, unknown> }) =>
     request<{ id: string }>('/api/proxies', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: Partial<{ name: string; server: string; port: number; config: Record<string, unknown> }>) =>
+  update: (id: string, data: Partial<{ name: string; type: string; server: string; port: number; config: Record<string, unknown> }>) =>
     request<{ ok: boolean }>(`/api/proxies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     request<{ ok: boolean }>(`/api/proxies/${id}`, { method: 'DELETE' }),

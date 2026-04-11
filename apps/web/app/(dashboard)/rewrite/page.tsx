@@ -100,7 +100,12 @@ export default function RuleProvidersPage() {
       if (!res.ok) throw new Error("Failed to create");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rule-providers"] }); toast.success(rT.ruleSetAdded); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rule-providers"] });
+      toast.success(rT.ruleSetAdded);
+      setShowDialog(false);
+      setForm({ name: "", type: "http", behavior: "domain", url: "", policy: "DIRECT", interval: "86400" });
+    },
     onError: () => toast.error(rT.ruleSetAddFailed),
   });
 
@@ -124,7 +129,7 @@ export default function RuleProvidersPage() {
       interval: Number(form.interval),
       policy: form.policy,
     });
-    setShowDialog(false);
+    // Dialog closes in onSuccess to preserve form data on error
   };
 
   const handleQuickAdd = (item: typeof defaultQuickAdd[0]) => {

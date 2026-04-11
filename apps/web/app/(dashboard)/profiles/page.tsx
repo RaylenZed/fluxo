@@ -51,6 +51,8 @@ export default function ProfilesPage() {
   const [newDesc, setNewDesc] = useState("");
   const [importUrl, setImportUrl] = useState("");
   const [importInterval, setImportInterval] = useState("24h");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const pT = t.profiles;
 
@@ -64,7 +66,7 @@ export default function ProfilesPage() {
       if (!res.ok) throw new Error("Failed to create");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success(pT.profileCreated); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success(pT.profileCreated); setShowNewDialog(false); setNewName(""); setNewDesc(""); },
     onError: () => toast.error(pT.profileCreateFailed),
   });
 
@@ -88,6 +90,34 @@ export default function ProfilesPage() {
     onError: () => toast.error(pT.profileDeleteFailed),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await fetch(`/api/profiles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error("Failed to rename");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success(pT.profileRenamed ?? "Profile renamed"); setRenamingId(null); setRenameValue(""); },
+    onError: () => toast.error(pT.profileRenameFailed ?? "Failed to rename"),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const res = await fetch(`/api/profiles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to duplicate");
+      return res.json();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success(pT.profileCreated); },
+    onError: () => toast.error(pT.profileCreateFailed),
+  });
+
   const handleActivate = (id: string) => {
     setPendingActivateId(id);
     setShowConfirmDialog(true);
@@ -102,9 +132,6 @@ export default function ProfilesPage() {
   const handleCreate = () => {
     if (!newName.trim()) return;
     createMutation.mutate({ name: newName.trim(), description: newDesc.trim() });
-    setNewName("");
-    setNewDesc("");
-    setShowNewDialog(false);
   };
 
   const pendingProfile = profiles.find((p) => p.id === pendingActivateId);
@@ -197,9 +224,15 @@ export default function ProfilesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2"><Download className="h-3.5 w-3.5" />{pT.export}</DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2"><Copy className="h-3.5 w-3.5" />{pT.duplicate}</DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2"><Pen className="h-3.5 w-3.5" />{pT.rename}</DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2" disabled><Download className="h-3.5 w-3.5" />{pT.export}</DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => duplicateMutation.mutate({ name: `${profile.name} (copy)`, description: profile.description })}
+                          ><Copy className="h-3.5 w-3.5" />{pT.duplicate}</DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => { setRenamingId(profile.id); setRenameValue(profile.name); }}
+                          ><Pen className="h-3.5 w-3.5" />{pT.rename}</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="gap-2 text-red-500"
@@ -296,6 +329,26 @@ export default function ProfilesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>{t.common.cancel}</Button>
             <Button onClick={confirmActivate} className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white">{pT.switch}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renamingId !== null} onOpenChange={(open) => { if (!open) { setRenamingId(null); setRenameValue(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{pT.rename}</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder={pT.namePlaceholder} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingId(null)}>{t.common.cancel}</Button>
+            <Button
+              onClick={() => { if (renamingId && renameValue.trim()) renameMutation.mutate({ id: renamingId, name: renameValue.trim() }); }}
+              disabled={!renameValue.trim() || renameMutation.isPending}
+              className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white"
+            >{t.common.save}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

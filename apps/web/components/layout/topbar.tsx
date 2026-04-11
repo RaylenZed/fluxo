@@ -1,10 +1,18 @@
 "use client";
-import { Moon, Sun, Bell, Search, Zap } from "lucide-react";
+import { Moon, Sun, Bell, Search, Zap, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/lib/i18n/context";
+import { useRouter } from "next/navigation";
+import { authApi } from "@/lib/api";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function useTunState() {
   const qc = useQueryClient();
@@ -70,6 +78,35 @@ function ModeSegment({
   );
 }
 
+function UserMenu() {
+  const { t } = useLocale();
+  const router = useRouter();
+
+  async function handleLogout() {
+    try { await authApi.logout(); } catch { /* ignore */ }
+    router.push('/login');
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 h-10 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-1.5 pr-3 ml-1 hover:bg-[var(--surface-2)] transition-colors outline-none">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-500)] shrink-0">
+            <Zap className="h-3.5 w-3.5 text-white" />
+          </div>
+          <span className="text-sm font-semibold text-[var(--foreground)] hidden sm:block">Admin</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36">
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-[var(--foreground)] gap-2">
+          <LogOut className="h-3.5 w-3.5" />
+          {t.topbar.logout}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function Topbar({ title, description, children }: TopbarProps) {
   const { theme, setTheme } = useTheme();
   const { t } = useLocale();
@@ -130,13 +167,8 @@ export function Topbar({ title, description, children }: TopbarProps) {
           <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[var(--brand-500)] border-2 border-[var(--surface)]" />
         </button>
 
-        {/* User profile chip */}
-        <div className="flex items-center gap-2 h-10 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-1.5 pr-3 ml-1">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-500)] shrink-0">
-            <Zap className="h-3.5 w-3.5 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-[var(--foreground)] hidden sm:block">Admin</span>
-        </div>
+        {/* User profile chip with logout dropdown */}
+        <UserMenu />
       </div>
     </header>
   );

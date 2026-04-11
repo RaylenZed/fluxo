@@ -67,7 +67,7 @@ export default function ProvidersPage() {
       if (!res.ok) throw new Error("Failed to create");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerAdded); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerAdded); setShowDialog(false); },
     onError: () => toast.error(t.providers.providerAddFailed),
   });
 
@@ -81,7 +81,7 @@ export default function ProvidersPage() {
       if (!res.ok) throw new Error("Failed to update");
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerUpdated); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerUpdated); setShowDialog(false); },
     onError: () => toast.error(t.providers.providerUpdateFailed),
   });
 
@@ -127,7 +127,6 @@ export default function ProvidersPage() {
     } else {
       createMutation.mutate(data);
     }
-    setShowDialog(false);
   };
 
   const handleUpdateNow = async (p: Provider) => {

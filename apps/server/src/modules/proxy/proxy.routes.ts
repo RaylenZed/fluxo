@@ -45,6 +45,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = req.params as { id: string };
       const body = req.body as Partial<{
         name: string;
+        type: string;
         server: string;
         port: number;
         config: Record<string, unknown>;

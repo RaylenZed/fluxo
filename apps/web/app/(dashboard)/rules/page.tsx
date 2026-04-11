@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Plus, Search, Download, Upload, GripVertical, MoreHorizontal,
   ChevronDown, ChevronRight, LayoutList, FolderOpen, Globe, ExternalLink,
@@ -45,7 +47,7 @@ import {
   useReorderRules,
   useGroups,
 } from "@/lib/hooks";
-import type { RuleRow } from "@/lib/api";
+import { rulesApi, type RuleRow } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type RuleType =
@@ -112,11 +114,13 @@ function SortableRuleRow({
   index,
   onEdit,
   onDelete,
+  onDuplicate,
 }: {
   rule: Rule;
   index: number;
   onEdit: (rule: Rule) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (rule: Rule) => void;
 }) {
   const { t } = useLocale();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -179,7 +183,7 @@ function SortableRuleRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onClick={() => onEdit(rule)}>{t.rules.editRule}</DropdownMenuItem>
-            <DropdownMenuItem>{t.rules.duplicate}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDuplicate(rule)}>{t.rules.duplicate}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-red-600" onClick={() => onDelete(rule.id)}>
               {t.rules.deleteItem}
@@ -197,12 +201,14 @@ function PolicyGroup({
   rules,
   onEdit,
   onDelete,
+  onDuplicate,
   startIndex,
 }: {
   policy: string;
   rules: Rule[];
   onEdit: (r: Rule) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (r: Rule) => void;
   startIndex: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -230,6 +236,7 @@ function PolicyGroup({
           index={startIndex + i}
           onEdit={onEdit}
           onDelete={onDelete}
+          onDuplicate={onDuplicate}
         />
       ))}
     </>
@@ -266,7 +273,6 @@ function RuleDialog({
 
   function handleSave() {
     onSave({ type, value, policy, note }, sendNotif, extendedMatch);
-    onClose();
   }
 
   return (
@@ -357,6 +363,17 @@ function RuleDialog({
   );
 }
 
+// Predefined rule set URL map (Loyalsoldier clash-rules)
+const BUILTIN_PRESET: Record<string, { url: string; behavior: string }> = {
+  "geoip-cn": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt", behavior: "ipcidr" },
+  "geoip-us": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt", behavior: "ipcidr" },
+  "geosite-cn": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt", behavior: "domain" },
+  "geosite-geolocation-!cn": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt", behavior: "domain" },
+  "geosite-google": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/google.txt", behavior: "domain" },
+  "geosite-youtube": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/applications.txt", behavior: "domain" },
+  "geosite-telegram": { url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt", behavior: "ipcidr" },
+};
+
 // ─── Rule Set Dialog ───────────────────────────────────────────────────────────
 function RuleSetDialog({
   open,
@@ -369,18 +386,73 @@ function RuleSetDialog({
 }) {
   const { t } = useLocale();
   const rT = t.rules;
+  const rsT = t.ruleSets;
+  const qc = useQueryClient();
 
   const [name, setName] = useState("");
   const [sourceType, setSourceType] = useState<"builtin" | "external">("builtin");
   const [builtinSet, setBuiltinSet] = useState(BUILTIN_RULE_SETS[0]);
+  const [behavior, setBehavior] = useState("domain");
   const [policy, setPolicy] = useState("Proxy");
   const [url, setUrl] = useState("");
   const [interval, setIntervalVal] = useState("86400");
   const [testing, setTesting] = useState(false);
 
-  function handleTest() {
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; type: string; behavior: string; url?: string; interval: number; policy: string }) => {
+      const res = await fetch("/api/rule-providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rule-providers"] });
+      toast.success(rsT.ruleSetAdded);
+      onClose();
+      setName(""); setUrl(""); setSourceType("builtin");
+    },
+    onError: () => toast.error(rsT.ruleSetAddFailed),
+  });
+
+  async function handleTest() {
+    if (!url.trim()) return;
     setTesting(true);
-    setTimeout(() => setTesting(false), 1500);
+    try {
+      await fetch(url, { method: "HEAD", mode: "no-cors" });
+      toast.success(rsT.urlReachable);
+    } catch {
+      toast.error(rsT.urlUnreachable);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  function handleAdd() {
+    if (!name.trim()) return;
+    if (sourceType === "builtin") {
+      const preset = BUILTIN_PRESET[builtinSet];
+      createMutation.mutate({
+        name: name.trim() || builtinSet,
+        type: "http",
+        behavior: preset?.behavior ?? "domain",
+        url: preset?.url,
+        interval: Number(interval),
+        policy,
+      });
+    } else {
+      if (!url.trim()) return;
+      createMutation.mutate({
+        name: name.trim(),
+        type: "http",
+        behavior,
+        url: url.trim(),
+        interval: Number(interval),
+        policy,
+      });
+    }
   }
 
   return (
@@ -420,7 +492,7 @@ function RuleSetDialog({
           {sourceType === "builtin" && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--muted)]">{rT.builtInSet}</label>
-              <Select value={builtinSet} onValueChange={setBuiltinSet}>
+              <Select value={builtinSet} onValueChange={(v) => { setBuiltinSet(v); if (!name) setName(v); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {BUILTIN_RULE_SETS.map((s) => (
@@ -454,13 +526,26 @@ function RuleSetDialog({
                   </Button>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--muted)]">{rT.updateInterval}</label>
-                <Input
-                  type="number"
-                  value={interval}
-                  onChange={(e) => setIntervalVal(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--muted)]">Behavior</label>
+                  <Select value={behavior} onValueChange={setBehavior}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="domain">Domain</SelectItem>
+                      <SelectItem value="ipcidr">IP CIDR</SelectItem>
+                      <SelectItem value="classical">Classical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--muted)]">{rT.updateInterval}</label>
+                  <Input
+                    type="number"
+                    value={interval}
+                    onChange={(e) => setIntervalVal(e.target.value)}
+                  />
+                </div>
               </div>
             </>
           )}
@@ -480,7 +565,10 @@ function RuleSetDialog({
 
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>{rT.cancel}</Button>
-          <Button onClick={onClose} disabled={!name.trim() || (sourceType === "external" && !url.trim())}>
+          <Button
+            onClick={handleAdd}
+            disabled={!name.trim() || (sourceType === "external" && !url.trim()) || createMutation.isPending}
+          >
             {rT.addRuleSet}
           </Button>
         </DialogFooter>
@@ -508,6 +596,7 @@ function SkeletonRows() {
 export default function RulesPage() {
   const { t } = useLocale();
   const rT = t.rules;
+  const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [groupByPolicy, setGroupByPolicy] = useState(false);
@@ -563,29 +652,81 @@ export default function RulesPage() {
     notify: boolean,
     extendedMatch: boolean
   ) {
+    const payload = {
+      type: data.type,
+      value: data.value,
+      policy: data.policy,
+      note: data.note,
+      notify: notify ? 1 : 0,
+      extended_matching: extendedMatch ? 1 : 0,
+    };
+    const close = () => { setShowAddRule(false); setEditingRule(undefined); };
     if (editingRule) {
-      updateRule.mutate({
-        id: editingRule.id,
-        data: {
-          type: data.type,
-          value: data.value,
-          policy: data.policy,
-          note: data.note,
-          notify: notify ? 1 : 0,
-          extended_matching: extendedMatch ? 1 : 0,
-        },
-      });
-      setEditingRule(undefined);
+      updateRule.mutate({ id: editingRule.id, data: payload }, { onSuccess: close });
     } else {
-      createRule.mutate({
-        type: data.type,
-        value: data.value,
-        policy: data.policy,
-        note: data.note,
-        notify: notify ? 1 : 0,
-        extended_matching: extendedMatch ? 1 : 0,
-      });
+      createRule.mutate(payload, { onSuccess: close });
     }
+  }
+
+  function handleDuplicate(rule: Rule) {
+    createRule.mutate({
+      type: rule.type,
+      value: rule.value,
+      policy: rule.policy,
+      note: rule.note ? `${rule.note} (copy)` : undefined,
+      notify: 0,
+      extended_matching: 0,
+    });
+  }
+
+  function handleExport() {
+    const data = (rulesQuery.data ?? []).map((r) => ({
+      type: r.type,
+      value: r.value,
+      policy: r.policy,
+      note: r.note,
+      notify: r.notify,
+      extended_matching: r.extended_matching,
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "rules.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImport() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const rows = JSON.parse(text) as Array<Partial<RuleRow>>;
+        if (!Array.isArray(rows)) throw new Error("invalid");
+        const valid = rows.filter((r) => r.type && r.value && r.policy);
+        let ok = 0;
+        for (const row of valid) {
+          try {
+            await rulesApi.create({
+              type: row.type, value: row.value, policy: row.policy,
+              note: row.note, notify: row.notify ?? 0,
+              extended_matching: row.extended_matching ?? 0,
+            });
+            ok++;
+          } catch { /* 单条失败不阻塞整体 */ }
+        }
+        qc.invalidateQueries({ queryKey: ['rules'] });
+        toast.success(`${rT.import}: ${ok}`);
+      } catch {
+        toast.error(rT.importFailed);
+      }
+    };
+    input.click();
   }
 
   // Group by policy
@@ -601,11 +742,11 @@ export default function RulesPage() {
   return (
     <div className="flex flex-col h-full">
       <Topbar title={rT.title} description={`${rulesQuery.data?.length ?? 0} ${rT.rulesConfigured}`}>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-[var(--muted)]">
+        <Button variant="ghost" size="sm" className="gap-1.5 text-[var(--muted)]" onClick={handleImport}>
           <Upload className="h-3.5 w-3.5" />
           {rT.import}
         </Button>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-[var(--muted)]">
+        <Button variant="ghost" size="sm" className="gap-1.5 text-[var(--muted)]" onClick={handleExport}>
           <Download className="h-3.5 w-3.5" />
           {rT.export}
         </Button>
@@ -692,6 +833,7 @@ export default function RulesPage() {
                               rules={groupRules}
                               onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
                               onDelete={handleDelete}
+                              onDuplicate={handleDuplicate}
                               startIndex={startIdx}
                             />
                           );
@@ -704,6 +846,7 @@ export default function RulesPage() {
                             index={i}
                             onEdit={(r) => { setEditingRule(r); setShowAddRule(true); }}
                             onDelete={handleDelete}
+                            onDuplicate={handleDuplicate}
                           />
                         ))
                       )}
@@ -726,6 +869,7 @@ export default function RulesPage() {
 
       {/* Dialogs */}
       <RuleDialog
+        key={editingRule?.id ?? "new-rule"}
         open={showAddRule}
         onClose={() => { setShowAddRule(false); setEditingRule(undefined); }}
         editingRule={editingRule}

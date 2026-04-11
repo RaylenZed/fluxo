@@ -17,6 +17,7 @@ import {
   useUpdateProxy,
   useDeleteProxy,
   useCreateGroup,
+  useUpdateGroup,
   useDeleteGroup,
   useApplyConfig,
 } from "@/lib/hooks";
@@ -285,6 +286,7 @@ export default function PoliciesPage() {
   const deleteProxy = useDeleteProxy();
   const updateProxy = useUpdateProxy();
   const createGroup = useCreateGroup();
+  const updateGroup = useUpdateGroup();
   const deleteGroup = useDeleteGroup();
   const applyConfig = useApplyConfig();
 
@@ -428,28 +430,35 @@ export default function PoliciesPage() {
       </div>
 
       <ProxyGroupDialog
+        key={editingGroupId ?? "new-group"}
         open={showNewGroup || editingGroupId !== null}
         onClose={() => { setShowNewGroup(false); setEditingGroupId(null); }}
         groupName={editingGroup?.name ?? undefined}
+        editGroup={editingGroup ?? undefined}
         onSave={(data) => {
           if (editingGroupId) {
-            // For now close — update mutation would go here
+            updateGroup.mutate({ id: editingGroupId, data }, {
+              onSuccess: () => { setShowNewGroup(false); setEditingGroupId(null); },
+            });
           } else {
-            createGroup.mutate(data);
+            createGroup.mutate(data, {
+              onSuccess: () => { setShowNewGroup(false); setEditingGroupId(null); },
+            });
           }
         }}
       />
       <ProxyNodeDialog
         open={showAddNode}
         onClose={() => setShowAddNode(false)}
-        onSave={(data) => createProxy.mutate(data)}
+        onSave={(data) => createProxy.mutate(data, { onSuccess: () => setShowAddNode(false) })}
       />
       <ProxyNodeDialog
+        key={editingNodeId ?? "new-node"}
         open={editingNodeId !== null}
         onClose={() => setEditingNodeId(null)}
         editNode={proxyNodes.find((n) => n.id === editingNodeId)}
         onSave={(data) => {
-          if (editingNodeId) updateProxy.mutate({ id: editingNodeId, data });
+          if (editingNodeId) updateProxy.mutate({ id: editingNodeId, data }, { onSuccess: () => setEditingNodeId(null) });
         }}
       />
     </div>

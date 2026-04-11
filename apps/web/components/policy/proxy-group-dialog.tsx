@@ -19,22 +19,27 @@ interface ProxyGroupDialogProps {
   onClose: () => void;
   onSave?: (data: Record<string, unknown>) => void;
   groupName?: string;
+  editGroup?: GroupRow;
 }
 
-export function ProxyGroupDialog({ open, onClose, onSave, groupName }: ProxyGroupDialogProps) {
+export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }: ProxyGroupDialogProps) {
   const { t } = useLocale();
   const gT = t.proxyGroup;
 
-  const [name, setName] = useState(groupName ?? "");
-  const [type, setType] = useState("select");
-  const [selected, setSelected] = useState<string[]>([]);
+  const initSelected = (() => { try { return JSON.parse(editGroup?.proxies ?? "[]") as string[]; } catch { return []; } })();
+
+  const [name, setName] = useState(editGroup?.name ?? groupName ?? "");
+  const [type, setType] = useState(editGroup?.type ?? "select");
+  const [selected, setSelected] = useState<string[]>(initSelected);
   const [useExternal, setUseExternal] = useState(false);
   const [externalUrl, setExternalUrl] = useState("");
   const [externalInterval, setExternalInterval] = useState("86400");
-  const [useAllProxies, setUseAllProxies] = useState(false);
-  const [filterRegex, setFilterRegex] = useState("");
-  const [url, setUrl] = useState("https://www.google.com/generate_204");
-  const [interval, setInterval] = useState("300");
+  const [useAllProxies, setUseAllProxies] = useState(Boolean(editGroup?.use_all_proxies));
+  const [filterRegex, setFilterRegex] = useState(editGroup?.filter ?? "");
+  const [url, setUrl] = useState(editGroup?.url ?? "https://www.google.com/generate_204");
+  const [interval, setInterval] = useState(String(editGroup?.interval ?? 300));
+  const [tolerance, setTolerance] = useState(String(editGroup?.tolerance ?? 150));
+  const [strategy, setStrategy] = useState(editGroup?.strategy ?? "consistent-hashing");
 
   // Fetch real proxies and groups from API
   const { data: proxies = [], isLoading: loadingProxies } = useQuery({
@@ -217,7 +222,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName }: ProxyGrou
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.tolerance}</label>
-                      <Input type="number" defaultValue="150" />
+                      <Input type="number" value={tolerance} onChange={(e) => setTolerance(e.target.value)} />
                     </div>
                   </div>
                 </>
@@ -225,7 +230,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName }: ProxyGrou
               {type === "load-balance" && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.strategy}</label>
-                  <Select defaultValue="consistent-hashing">
+                  <Select value={strategy} onValueChange={setStrategy}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="consistent-hashing">Consistent Hashing</SelectItem>
@@ -245,7 +250,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName }: ProxyGrou
 
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>{gT.cancel}</Button>
-          <Button onClick={() => { onSave?.({ name: name.trim(), type, proxies: selected, filter: filterRegex || undefined, url, interval: parseInt(interval, 10), use_all_proxies: useAllProxies ? 1 : 0 }); onClose(); }} disabled={!name.trim()}>
+          <Button onClick={() => { onSave?.({ name: name.trim(), type, proxies: selected, filter: filterRegex, url, interval: parseInt(interval, 10), tolerance: parseInt(tolerance, 10), strategy, use_all_proxies: useAllProxies ? 1 : 0 }); }} disabled={!name.trim()}>
             {groupName ? gT.saveChanges : gT.createGroup}
           </Button>
         </DialogFooter>

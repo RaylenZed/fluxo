@@ -49,6 +49,7 @@ const translations = {
       enhanced: 'Enhanced',
       toggleTheme: 'Toggle theme',
       searchPlaceholder: 'Search nodes, rules, profiles…',
+      logout: 'Log out',
     },
     // ── Dashboard page ───────────────────────────────────────────────────
     dashboard: {
@@ -194,6 +195,7 @@ const translations = {
       cannotReachApi: 'Cannot reach API server',
       backendHint: 'Make sure the backend is running on port 8090',
       filterCount: 'rules',
+      importFailed: 'Import failed',
     },
     // ── Settings page ────────────────────────────────────────────────────
     settings: {
@@ -287,6 +289,8 @@ const translations = {
       profileActivateFailed: 'Failed to activate profile',
       profileDeleted: 'Profile deleted',
       profileDeleteFailed: 'Failed to delete profile',
+      profileRenamed: 'Profile renamed',
+      profileRenameFailed: 'Failed to rename profile',
       updated: 'Updated',
     },
     // ── DNS page ─────────────────────────────────────────────────────────
@@ -482,6 +486,8 @@ const translations = {
       ruleSetAddFailed: 'Failed to add rule provider',
       ruleSetDeleted: 'Rule provider deleted',
       ruleSetDeleteFailed: 'Failed to delete rule provider',
+      urlReachable: 'URL is reachable',
+      urlUnreachable: 'Cannot reach URL',
       geoCnDirect: 'GeoIP CN (Direct)',
       geositeCnDirect: 'GeoSite CN (Direct)',
       rejectAds: 'Reject Ads',
@@ -663,6 +669,7 @@ const translations = {
       enhanced: '增强模式',
       toggleTheme: '切换主题',
       searchPlaceholder: '搜索节点、规则、配置…',
+      logout: '退出登录',
     },
     // ── 仪表板 ───────────────────────────────────────────────────────────
     dashboard: {
@@ -808,6 +815,7 @@ const translations = {
       cannotReachApi: '无法连接到 API 服务器',
       backendHint: '请确保后端服务运行在端口 8090',
       filterCount: '条规则',
+      importFailed: '导入失败',
     },
     // ── 设置页 ───────────────────────────────────────────────────────────
     settings: {
@@ -901,6 +909,8 @@ const translations = {
       profileActivateFailed: '激活配置失败',
       profileDeleted: '配置已删除',
       profileDeleteFailed: '删除配置失败',
+      profileRenamed: '配置已重命名',
+      profileRenameFailed: '重命名配置失败',
       updated: '更新于',
     },
     // ── DNS 页 ───────────────────────────────────────────────────────────
@@ -1096,6 +1106,8 @@ const translations = {
       ruleSetAddFailed: '添加规则集失败',
       ruleSetDeleted: '规则集已删除',
       ruleSetDeleteFailed: '删除规则集失败',
+      urlReachable: 'URL 可访问',
+      urlUnreachable: '无法访问 URL',
       geoCnDirect: 'GeoIP CN（直连）',
       geositeCnDirect: 'GeoSite CN（直连）',
       rejectAds: '拦截广告',

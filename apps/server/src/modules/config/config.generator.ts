@@ -1,6 +1,184 @@
 import yaml from 'js-yaml';
 import { getDb } from '../../database/db';
 
+// ─── Proxy field normalizer ────────────────────────────────────────────────────
+// The dialog stores all config values as strings in a JSON blob.
+// This function maps those raw strings into the Mihomo YAML field names and types.
+function normalizeProxy(row: { name: string; type: string; server: string; port: number; config: string }): Record<string, unknown> {
+  const cfg: Record<string, string> = (() => {
+    try { return JSON.parse(row.config) as Record<string, string>; } catch { return {}; }
+  })();
+
+  const base: Record<string, unknown> = {
+    name: row.name,
+    type: row.type,
+    server: row.server,
+    port: row.port,
+  };
+
+  // Universal options (stored as actual booleans from the dialog Switch components)
+  if (cfg.udp === true as unknown as string || cfg.udp === 'true') base.udp = true;
+  if (cfg.tfo === true as unknown as string || cfg.tfo === 'true') base.tfo = true;
+  // remarks is Fluxo-internal — omit from Mihomo config
+
+  const tlsBool = cfg.tls === 'true';
+  const sni = cfg.sni ?? '';
+  const skipCert = cfg.skipCert === 'true';
+
+  switch (row.type) {
+    case 'http':
+    case 'https': {
+      if (cfg.username) base.username = cfg.username;
+      if (cfg.password) base.password = cfg.password;
+      if (row.type === 'https') {
+        base.tls = true;
+        if (sni) base.sni = sni;
+        if (skipCert) base['skip-cert-verify'] = true;
+      }
+      break;
+    }
+    case 'socks5':
+    case 'socks5-tls': {
+      if (cfg.username) base.username = cfg.username;
+      if (cfg.password) base.password = cfg.password;
+      if (row.type === 'socks5-tls') {
+        base.tls = true;
+        if (sni) base.sni = sni;
+        if (skipCert) base['skip-cert-verify'] = true;
+      }
+      break;
+    }
+    case 'ss': {
+      base.cipher = cfg.cipher || 'aes-256-gcm';
+      base.password = cfg.password || '';
+      if (cfg.plugin && cfg.plugin !== '__none__') {
+        base.plugin = cfg.plugin;
+        if (cfg.pluginOpts) {
+          const opts: Record<string, string> = {};
+          for (const part of cfg.pluginOpts.split(';')) {
+            const [k, ...rest] = part.split('=');
+            if (k?.trim()) opts[k.trim()] = rest.join('=').trim();
+          }
+          base['plugin-opts'] = opts;
+        }
+      }
+      break;
+    }
+    case 'vmess': {
+      base.uuid = cfg.uuid || '';
+      base.alterId = parseInt(cfg.alterId || '0', 10);
+      base.cipher = cfg.cipher || 'auto';
+      base.network = cfg.network || 'tcp';
+      if (tlsBool) {
+        base.tls = true;
+        if (sni) base.servername = sni;
+        if (skipCert) base['skip-cert-verify'] = true;
+      }
+      if (cfg.network === 'ws') {
+        const wsOpts: Record<string, unknown> = { path: cfg.wsPath || '/' };
+        if (cfg.wsHeaders) {
+          try { wsOpts.headers = JSON.parse(cfg.wsHeaders); } catch { /* ignore malformed JSON */ }
+        }
+        base['ws-opts'] = wsOpts;
+      }
+      break;
+    }
+    case 'vless': {
+      base.uuid = cfg.uuid || '';
+      if (cfg.flow && cfg.flow !== '__none__') base.flow = cfg.flow;
+      base.network = cfg.network || 'tcp';
+      if (tlsBool) {
+        base.tls = true;
+        if (sni) base.servername = sni;
+        if (skipCert) base['skip-cert-verify'] = true;
+      }
+      break;
+    }
+    case 'trojan': {
+      base.password = cfg.password || '';
+      base.network = cfg.network || 'tcp';
+      base.tls = true; // Trojan always uses TLS
+      if (sni) base.servername = sni;
+      if (skipCert) base['skip-cert-verify'] = true;
+      break;
+    }
+    case 'snell': {
+      base.psk = cfg.psk || '';
+      base.version = parseInt(cfg.version || '3', 10);
+      const obfsMode = cfg.obfs || 'simple';
+      const obfsOpts: Record<string, unknown> = { mode: obfsMode };
+      if (cfg.obfsHost) obfsOpts.host = cfg.obfsHost;
+      base['obfs-opts'] = obfsOpts;
+      break;
+    }
+    case 'tuic': {
+      base.uuid = cfg.uuid || '';
+      base.password = cfg.password || '';
+      if (cfg.congestion) base['congestion-controller'] = cfg.congestion;
+      if (cfg.udpRelay) base['udp-relay-mode'] = cfg.udpRelay;
+      if (sni) base.sni = sni;
+      if (skipCert) base['skip-cert-verify'] = true;
+      break;
+    }
+    case 'tuicv5': {
+      base.uuid = cfg.uuid || '';
+      base.password = cfg.password || '';
+      if (cfg.congestion) base['congestion-controller'] = cfg.congestion;
+      if (cfg.alpn) base.alpn = cfg.alpn.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (sni) base.sni = sni;
+      if (skipCert) base['skip-cert-verify'] = true;
+      break;
+    }
+    case 'hysteria2': {
+      base.password = cfg.password || '';
+      if (cfg.up) base.up = parseInt(cfg.up, 10);
+      if (cfg.down) base.down = parseInt(cfg.down, 10);
+      if (cfg.obfs && cfg.obfs !== '__none__') {
+        base.obfs = { type: cfg.obfs, password: cfg.obfsPassword || '' };
+      }
+      if (sni) base.sni = sni;
+      if (skipCert) base['skip-cert-verify'] = true;
+      break;
+    }
+    case 'wireguard': {
+      if (cfg.ip) base.ip = cfg.ip;
+      base['private-key'] = cfg.privateKey || '';
+      base['public-key'] = cfg.publicKey || '';
+      if (cfg.presharedKey) base['pre-shared-key'] = cfg.presharedKey;
+      if (cfg.dns) base.dns = cfg.dns.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (cfg.mtu) base.mtu = parseInt(cfg.mtu, 10);
+      if (cfg.reserved) {
+        const parts = cfg.reserved.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n));
+        if (parts.length > 0) base.reserved = parts;
+      }
+      break;
+    }
+    case 'anytls': {
+      base.password = cfg.password || '';
+      if (sni) base.sni = sni;
+      if (skipCert) base['skip-cert-verify'] = true;
+      break;
+    }
+    case 'ssh': {
+      base.username = cfg.username || 'root';
+      if (cfg.privateKey) {
+        base['private-key'] = cfg.privateKey;
+      } else if (cfg.password) {
+        base.password = cfg.password;
+      }
+      if (cfg.hostKey) base['host-key'] = [cfg.hostKey];
+      break;
+    }
+    default: {
+      // Unknown type — pass through raw config minus internal fields
+      const { udp: _u, tfo: _t, remarks: _r, sni: _s, skipCert: _sc, ...rest } = cfg;
+      Object.assign(base, rest);
+    }
+  }
+
+  return base;
+}
+
 export async function generateConfig(): Promise<string> {
   const db = getDb();
 
@@ -13,10 +191,7 @@ export async function generateConfig(): Promise<string> {
 
   // Load proxies
   const proxyRows = db.prepare('SELECT * FROM proxies ORDER BY sort_order').all() as any[];
-  const proxies = proxyRows.map(row => {
-    const config = JSON.parse(row.config);
-    return { name: row.name, type: row.type, server: row.server, port: row.port, ...config };
-  });
+  const proxies = proxyRows.map(row => normalizeProxy(row));
 
   // Load providers
   const providerRows = db.prepare('SELECT * FROM providers').all() as any[];
