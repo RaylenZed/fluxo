@@ -231,7 +231,7 @@ install_mihomo() {
   local tmpdir=""
   tmpdir="$(mktemp -d)"
 
-  if ! curl -fsSL --progress-bar -o "${tmpdir}/${filename}" "$url"; then
+  if ! curl -fSL --progress-bar -o "${tmpdir}/${filename}" "$url"; then
     rm -rf "$tmpdir"
     die "Failed to download Mihomo. Check version and network connectivity."
   fi
@@ -381,7 +381,7 @@ install_fluxo() {
     tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
     tmptar="$(mktemp)"
-    curl -fsSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://gh-proxy.com/"
+    curl -fSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://gh-proxy.com/"
     tar -xzf "$tmptar" --strip-components=1 -C "$INSTALL_DIR"
     rm -f "$tmptar"
   fi
