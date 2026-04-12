@@ -9,6 +9,13 @@ import { generateConfig } from './modules/config/config.generator';
 import { getDb } from './database/db';
 import { verifyToken, COOKIE_NAME } from './modules/auth/auth.service';
 
+for (const envFile of ['.env.local', '.env']) {
+  const envPath = path.join(process.cwd(), envFile);
+  if (fs.existsSync(envPath)) {
+    process.loadEnvFile(envPath);
+  }
+}
+
 const app = Fastify({ logger: true });
 
 // Routes that don't require authentication
@@ -54,6 +61,7 @@ async function main() {
   const { providerRoutes } = await import('./modules/provider/provider.routes');
   const { ruleProviderRoutes } = await import('./modules/rule-provider/rule-provider.routes');
   const { configRoutes } = await import('./modules/config/config.routes');
+  const { realtimeRoutes } = await import('./modules/realtime/realtime.routes');
 
   await app.register(authRoutes, { prefix: '/api' });
   await app.register(proxyRoutes, { prefix: '/api' });
@@ -66,6 +74,7 @@ async function main() {
   await app.register(providerRoutes, { prefix: '/api' });
   await app.register(ruleProviderRoutes, { prefix: '/api' });
   await app.register(configRoutes, { prefix: '/api' });
+  await app.register(realtimeRoutes, { prefix: '/api' });
 
   // WebSocket endpoint for real-time data
   app.get('/ws', { websocket: true }, (socket) => {
@@ -81,8 +90,8 @@ async function main() {
 
   getDb();
 
-  const configPath = process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
-  const configDir = path.dirname(configPath);
+  let configPath = process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
+  let configDir = path.dirname(configPath);
   try {
     if (!fs.existsSync(configPath)) {
       app.log.info(`No config found at ${configPath}, generating default config...`);
@@ -92,8 +101,30 @@ async function main() {
       app.log.info(`Default config written to ${configPath}`);
     }
   } catch (err) {
+    const fallbackPath = path.join(process.cwd(), 'data', 'config.yaml');
+    const fallbackDir = path.dirname(fallbackPath);
     app.log.warn(`Could not write default config to ${configPath}: ${(err as Error).message}`);
-    app.log.warn('You can manually generate it via POST /api/config/apply');
+
+    if (configPath !== fallbackPath) {
+      process.env.CONFIG_PATH = fallbackPath;
+      configPath = fallbackPath;
+      configDir = fallbackDir;
+
+      try {
+        if (!fs.existsSync(configPath)) {
+          app.log.warn(`Falling back to writable local config path: ${configPath}`);
+          fs.mkdirSync(configDir, { recursive: true });
+          const yaml = await generateConfig();
+          fs.writeFileSync(configPath, yaml, 'utf-8');
+          app.log.info(`Default config written to fallback path ${configPath}`);
+        }
+      } catch (fallbackErr) {
+        app.log.warn(`Fallback config path also failed: ${(fallbackErr as Error).message}`);
+        app.log.warn('You can manually generate it via POST /api/config/apply');
+      }
+    } else {
+      app.log.warn('You can manually generate it via POST /api/config/apply');
+    }
   }
 
   startMihomoRelay();

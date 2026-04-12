@@ -1,11 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from 'react';
-
-const getWsUrl = () => {
-  if (typeof window === 'undefined') return 'ws://localhost:8090/ws';
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.hostname}:8090/ws`;
-};
+import { useEffect, useState } from 'react';
 
 export interface Connection {
   id: string;
@@ -27,45 +21,43 @@ export interface Connection {
 }
 
 export interface ConnectionsState {
+  connected?: boolean;
   connections: Connection[];
   downloadTotal: number;
   uploadTotal: number;
 }
 
 export function useRealtimeConnections() {
-  const [state, setState] = useState<ConnectionsState>({ connections: [], downloadTotal: 0, uploadTotal: 0 });
-  const wsRef = useRef<WebSocket | null>(null);
+  const [state, setState] = useState<ConnectionsState>({ connected: false, connections: [], downloadTotal: 0, uploadTotal: 0 });
 
   useEffect(() => {
-    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let active = true;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function connect() {
+    async function poll() {
       try {
-        const ws = new WebSocket(getWsUrl());
-        wsRef.current = ws;
-
-        ws.onmessage = (e) => {
-          try {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'connections' && msg.data) {
-              setState(msg.data);
-            }
-          } catch {
-            // ignore malformed messages
-          }
-        };
-
-        ws.onclose = () => { reconnectTimer = setTimeout(connect, 3000); };
-        ws.onerror = () => { ws.close(); };
+        const res = await fetch('/api/realtime/connections', { cache: 'no-store' });
+        if (!active) return;
+        if (!res.ok) {
+          setState({ connected: false, connections: [], downloadTotal: 0, uploadTotal: 0 });
+        } else {
+          const data = await res.json() as ConnectionsState;
+          setState(data);
+        }
       } catch {
-        reconnectTimer = setTimeout(connect, 3000);
+        if (!active) return;
+        setState({ connected: false, connections: [], downloadTotal: 0, uploadTotal: 0 });
+      } finally {
+        if (active) {
+          pollTimer = setTimeout(poll, 3000);
+        }
       }
     }
 
-    connect();
+    poll();
     return () => {
-      clearTimeout(reconnectTimer);
-      wsRef.current?.close();
+      active = false;
+      clearTimeout(pollTimer);
     };
   }, []);
 

@@ -5,12 +5,14 @@ import axios from 'axios';
 import { getDb } from '../../database/db';
 import { writeConfigAndReload } from '../config/config.generator';
 import { getSetting } from '../settings/settings.service';
+import { normalizeControllerHost } from './mihomo.config';
 import {
   getMihomoStatus,
   getMihomoVersion,
   getMihomoConnections,
   closeConnection,
   closeAllConnections,
+  getTrafficStats,
   reloadConfig,
 } from './mihomo.service';
 
@@ -33,7 +35,7 @@ function getMihomoConfig(): { apiUrl: string; secret: string } {
   const secretRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.secret'").get() as
     | { value: string }
     | undefined;
-  const host = apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090';
+  const host = normalizeControllerHost(apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090');
   const secret = secretRow ? JSON.parse(secretRow.value) : '';
   return { apiUrl: `http://${host}`, secret };
 }
@@ -69,6 +71,15 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: 'Failed to get connections' });
+    }
+  });
+
+  fastify.get('/mihomo/traffic', async (_req, reply) => {
+    try {
+      return await getTrafficStats();
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(503).send({ up: 0, down: 0, connected: false });
     }
   });
 
@@ -151,16 +162,16 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
           if (match) {
             clearTimeout(timer);
             controller.abort();
-            try { reply.send(JSON.parse(match[1])); } catch (err) { fastify.log.warn({ err }, 'Failed to parse memory payload'); reply.send({ inuse: 0 }); }
+            try { reply.send({ ...JSON.parse(match[1]), connected: true }); } catch (err) { fastify.log.warn({ err }, 'Failed to parse memory payload'); reply.send({ inuse: null, connected: false }); }
             resolve();
           }
         });
-        res.data.on('error', () => { clearTimeout(timer); reply.code(503).send({ error: 'stream error' }); resolve(); });
-        res.data.on('end', () => { clearTimeout(timer); if (!reply.sent) reply.send({ inuse: 0 }); resolve(); });
+        res.data.on('error', () => { clearTimeout(timer); reply.send({ inuse: null, connected: false }); resolve(); });
+        res.data.on('end', () => { clearTimeout(timer); if (!reply.sent) reply.send({ inuse: null, connected: false }); resolve(); });
       });
     } catch (err) {
-      fastify.log.error({ err }, 'Failed to stream memory from Mihomo');
-      reply.code(503).send({ error: 'Mihomo not reachable' });
+      fastify.log.debug({ err }, 'Failed to stream memory from Mihomo');
+      reply.send({ inuse: null, connected: false });
     }
   });
 
@@ -173,7 +184,7 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const seconds = Math.floor((Date.now() - since) / 1000);
       return { uptime: seconds };
     } catch (err) {
-      fastify.log.warn({ err }, 'Failed to read mihomo uptime via systemctl');
+      fastify.log.debug({ err }, 'Failed to read mihomo uptime via systemctl');
       return { uptime: null };
     }
   });
@@ -184,15 +195,40 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const latencyMs = await new Promise<number>((resolve, reject) => {
         const start = Date.now();
+        // Use a real wall-clock timer so DNS resolution time is also bounded
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          socket.destroy();
+          reject(Object.assign(new Error('Connection timed out'), { code: 'ETIMEDOUT' }));
+        }, timeout);
         const socket = net.createConnection({ host: server, port });
-        socket.setTimeout(timeout);
-        socket.on('connect', () => { socket.destroy(); resolve(Date.now() - start); });
-        socket.on('timeout', () => { socket.destroy(); reject(new Error('Connection timed out')); });
-        socket.on('error', (err) => { socket.destroy(); reject(err); });
+        socket.on('connect', () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          socket.destroy();
+          resolve(Date.now() - start);
+        });
+        socket.on('error', (err) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          socket.destroy();
+          reject(err);
+        });
       });
       return { ok: true, latencyMs };
     } catch (err) {
-      return { ok: false, error: (err as Error).message };
+      const e = err as NodeJS.ErrnoException;
+      const code = e.code ?? 'UNKNOWN';
+      let errorType = 'error';
+      if (code === 'ENOTFOUND') errorType = 'dns_failed';
+      else if (code === 'ECONNREFUSED') errorType = 'refused';
+      else if (code === 'ECONNRESET') errorType = 'reset';
+      else if (code === 'ETIMEDOUT') errorType = 'timeout';
+      return { ok: false, error: e.message, errorType };
     }
   });
 

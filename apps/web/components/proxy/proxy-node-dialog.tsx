@@ -596,6 +596,9 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
     toast.success(pT.parsedFrom);
   }
 
+  const UDP_PROTOCOLS: Protocol[] = ["Hysteria2", "TUIC", "TUICv5", "WireGuard"];
+  const isUdpProtocol = UDP_PROTOCOLS.includes(protocol);
+
   async function handleTest() {
     setTesting(true);
     try {
@@ -604,11 +607,19 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ server: server.trim(), port: parseInt(port, 10), timeout: 5000 }),
       });
-      const data = await res.json() as { ok: boolean; latencyMs?: number; error?: string };
+      const data = await res.json() as { ok: boolean; latencyMs?: number; error?: string; errorType?: string };
       if (data.ok) {
         toast.success(`${server}:${port} — ${data.latencyMs}ms`);
       } else {
-        toast.error(`${server}:${port} — ${data.error ?? 'unreachable'}`);
+        let msg: string;
+        switch (data.errorType) {
+          case 'dns_failed': msg = pT.dnsFailed; break;
+          case 'refused':    msg = pT.connRefused; break;
+          case 'reset':      msg = pT.connReset; break;
+          case 'timeout':    msg = pT.connTimeout; break;
+          default:           msg = data.error ?? 'unreachable';
+        }
+        toast.error(`${server}:${port} — ${msg}`);
       }
     } catch {
       toast.error(`${server}:${port} — unreachable`);
@@ -697,7 +708,14 @@ export function ProxyNodeDialog({ open, onClose, onSave, initialProtocol = "VMes
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={handleTest} disabled={!server || !port || testing} className="mr-auto gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleTest}
+            disabled={!server || !port || testing || isUdpProtocol}
+            title={isUdpProtocol ? pT.udpNoTest : undefined}
+            className="mr-auto gap-1.5"
+          >
             <Wifi className="h-3.5 w-3.5" />
             {testing ? pT.testing : pT.testConnection}
           </Button>

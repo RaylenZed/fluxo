@@ -52,6 +52,7 @@ export default function SetupPage() {
             placeholder="Password (min 6 chars)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
             autoFocus
             required
           />
@@ -60,6 +61,7 @@ export default function SetupPage() {
             placeholder="Confirm password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
             required
           />
           <Button type="submit" className="w-full" disabled={loading}>

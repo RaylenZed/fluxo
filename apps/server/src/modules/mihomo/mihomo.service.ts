@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getDb } from '../../database/db';
+import { normalizeControllerHost } from './mihomo.config';
 
 const TIMEOUT = 5_000;
 
@@ -17,7 +18,7 @@ function getMihomoConfig(): { apiUrl: string; secret: string } {
   const secretRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.secret'").get() as
     | { value: string }
     | undefined;
-  const host = apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090';
+  const host = normalizeControllerHost(apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090');
   const secret = secretRow ? JSON.parse(secretRow.value) : '';
   return { apiUrl: `http://${host}`, secret };
 }

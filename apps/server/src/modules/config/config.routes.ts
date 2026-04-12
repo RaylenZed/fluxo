@@ -4,6 +4,7 @@ import path from 'path';
 import { generateConfig, writeConfigAndReload } from './config.generator';
 import { reloadConfig } from '../mihomo/mihomo.service';
 import { getSetting } from '../settings/settings.service';
+import { normalizeControllerHost } from '../mihomo/mihomo.config';
 
 function getConfigPath(): string {
   return process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
@@ -52,7 +53,7 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
         mihomoApiUrl = process.env.MIHOMO_API_URL;
         mihomoSecret = process.env.MIHOMO_SECRET || undefined;
       } else {
-        const apiHost = (getSetting('mihomo.external_controller') as string) || '127.0.0.1:9090';
+        const apiHost = normalizeControllerHost((getSetting('mihomo.external_controller') as string) || '127.0.0.1:9090');
         mihomoApiUrl = `http://${apiHost}`;
         mihomoSecret = (getSetting('mihomo.secret') as string) || undefined;
       }
