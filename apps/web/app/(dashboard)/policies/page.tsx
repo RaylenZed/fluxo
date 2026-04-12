@@ -269,14 +269,22 @@ export default function PoliciesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
+      const data = await res.json().catch(() => ({})) as { delay?: number; error?: string; errorType?: string };
       if (res.ok) {
-        const data = await res.json() as { delay?: number };
         toast.success(`${name}: ${data.delay ?? "?"}ms`);
       } else {
-        toast.error(`${name}: timeout`);
+        if (data.errorType === "not_loaded") {
+          toast.error(`${name}: ${t.policies.switchFailed}`);
+        } else if (data.errorType === "timeout") {
+          toast.error(`${name}: ${t.proxyNode.connTimeout}`);
+        } else if (data.error) {
+          toast.error(`${name}: ${data.error}`);
+        } else {
+          toast.error(`${name}: ${t.common.error}`);
+        }
       }
     } catch {
-      toast.error(`${name}: unreachable`);
+      toast.error(`${name}: ${t.policies.cannotReachApi}`);
     }
   }
 

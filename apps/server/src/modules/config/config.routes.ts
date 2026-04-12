@@ -10,6 +10,17 @@ function getConfigPath(): string {
   return process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === 'object' && err !== null) {
+    const response = (err as { response?: { data?: unknown } }).response;
+    const data = response?.data as { error?: string; message?: string } | undefined;
+    if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+    if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
 
 export const configRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/config — return current raw YAML on disk (or generated if not exists)
@@ -61,7 +72,7 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: true, configPath };
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Failed to apply config' });
+      reply.code(500).send({ error: getErrorMessage(err, 'Failed to apply config') });
     }
   });
 

@@ -46,6 +46,36 @@ function getHeaders(secret: string): Record<string, string> {
   return h;
 }
 
+function getAxiosErrorDetails(
+  err: unknown,
+  fallbackMessage: string,
+): { statusCode: number; error: string; errorType: string } {
+  let statusCode = 503;
+  let error = fallbackMessage;
+  let errorType = 'error';
+
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string; message?: string } | undefined;
+    statusCode = err.response?.status ?? 503;
+    error = data?.message || data?.error || err.message || fallbackMessage;
+
+    if (statusCode === 404) {
+      errorType = 'not_loaded';
+      error = 'Proxy node is not loaded in Mihomo. Apply config first.';
+      statusCode = 409;
+    } else if (err.code === 'ECONNABORTED') {
+      errorType = 'timeout';
+      statusCode = 504;
+    } else if (statusCode >= 500) {
+      errorType = 'unreachable';
+    }
+  } else if (err instanceof Error) {
+    error = err.message || fallbackMessage;
+  }
+
+  return { statusCode, error, errorType };
+}
+
 export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/mihomo/status', async (_req, reply) => {
     try {
@@ -246,7 +276,8 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       return res.data; // { delay: number }
     } catch (err) {
       fastify.log.error({ err }, 'Proxy delay test failed');
-      reply.code(503).send({ error: 'Test failed' });
+      const details = getAxiosErrorDetails(err, 'Latency test failed');
+      reply.code(details.statusCode).send({ error: details.error, errorType: details.errorType });
     }
   });
 

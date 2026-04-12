@@ -86,7 +86,37 @@ function seedDefaults(db: Database.Database) {
     db.prepare(`
       INSERT INTO proxy_groups
         (id, name, type, proxies, providers, url, interval, tolerance, filter, use_all_proxies, sort_order, created_at, updated_at)
-      VALUES ('default-proxy-group', 'Proxy', 'select', '[]', '[]', NULL, 300, 150, NULL, 0, 0, ?, ?)
+      VALUES ('default-proxy-group', 'Proxy', 'select', '["DIRECT"]', '[]', NULL, 300, 150, NULL, 1, 0, ?, ?)
     `).run(now, now);
+  }
+
+  // Older databases seeded the default group with no members, which Mihomo rejects.
+  const defaultGroup = db.prepare(`
+    SELECT proxies, providers, use_all_proxies
+    FROM proxy_groups
+    WHERE id = 'default-proxy-group'
+  `).get() as { proxies: string; providers: string; use_all_proxies: number } | undefined;
+
+  if (defaultGroup) {
+    const parseList = (raw: string) => {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const proxies = parseList(defaultGroup.proxies);
+    const providers = parseList(defaultGroup.providers);
+    const hasMembers = defaultGroup.use_all_proxies === 1 || proxies.length > 0 || providers.length > 0;
+
+    if (!hasMembers) {
+      db.prepare(`
+        UPDATE proxy_groups
+        SET proxies = ?, use_all_proxies = 1, updated_at = ?
+        WHERE id = 'default-proxy-group'
+      `).run(JSON.stringify(['DIRECT']), now);
+    }
   }
 }

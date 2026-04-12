@@ -1,6 +1,16 @@
 import yaml from 'js-yaml';
 import { getDb } from '../../database/db';
 
+function parseStringList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 // ─── Proxy field normalizer ────────────────────────────────────────────────────
 // The dialog stores all config values as strings in a JSON blob.
 // This function maps those raw strings into the Mihomo YAML field names and types.
@@ -192,6 +202,7 @@ export async function generateConfig(): Promise<string> {
   // Load proxies
   const proxyRows = db.prepare('SELECT * FROM proxies ORDER BY sort_order').all() as any[];
   const proxies = proxyRows.map(row => normalizeProxy(row));
+  const proxyNames = proxyRows.map((row) => row.name as string);
 
   // Load providers
   const providerRows = db.prepare('SELECT * FROM providers').all() as any[];
@@ -209,17 +220,30 @@ export async function generateConfig(): Promise<string> {
 
   // Load proxy groups
   const groupRows = db.prepare('SELECT * FROM proxy_groups ORDER BY sort_order').all() as any[];
-  const proxyGroups = groupRows.map(row => {
+  const proxyGroups = groupRows.flatMap(row => {
+    const isDefaultGroup = row.id === 'default-proxy-group' || row.name === 'Proxy';
+    const explicitProxies = parseStringList(row.proxies);
+    const providers = parseStringList(row.providers);
+    const includeAll = Boolean(row.use_all_proxies) || (isDefaultGroup && explicitProxies.length === 0 && providers.length === 0);
+    const fallbackProxies = isDefaultGroup ? ['DIRECT'] : [];
+    const proxiesForGroup = explicitProxies.length > 0 ? explicitProxies : fallbackProxies;
+
+    if (proxiesForGroup.length === 0 && providers.length === 0 && !includeAll) {
+      return [];
+    }
+
     const base: Record<string, unknown> = {
       name: row.name,
       type: row.type,
-      proxies: JSON.parse(row.proxies),
     };
-    if (row.providers && JSON.parse(row.providers).length > 0) {
-      base['use'] = JSON.parse(row.providers);
+    if (proxiesForGroup.length > 0) {
+      base.proxies = proxiesForGroup;
+    }
+    if (providers.length > 0) {
+      base['use'] = providers;
     }
     if (row.filter) base['filter'] = row.filter;
-    if (row.use_all_proxies) base['include-all'] = true;
+    if (includeAll && (proxyNames.length > 0 || isDefaultGroup)) base['include-all'] = true;
     if (row.type === 'url-test' || row.type === 'fallback') {
       base['url'] = row.url || 'https://www.google.com/generate_204';
       base['interval'] = row.interval || 300;
@@ -228,7 +252,7 @@ export async function generateConfig(): Promise<string> {
     if (row.type === 'load-balance') {
       base['strategy'] = row.strategy || 'consistent-hashing';
     }
-    return base;
+    return [base];
   });
 
   // Load rule providers
