@@ -122,7 +122,7 @@ export const providerRoutes: FastifyPluginAsync = async (fastify) => {
       const db = getDb();
       const existing = db.prepare('SELECT name FROM providers WHERE id = ?').get(id) as { name: string } | undefined;
       if (!existing) throw new HttpError(404, 'Provider not found');
-      const groupRefs = (db.prepare('SELECT providers FROM proxy_groups').all() as Array<{ providers: string }>)
+      const groupRefs = (db.prepare('SELECT name, providers FROM proxy_groups ORDER BY name').all() as Array<{ name: string; providers: string }>)
         .filter((group) => {
           try {
             const providers = JSON.parse(group.providers || '[]');
@@ -130,8 +130,14 @@ export const providerRoutes: FastifyPluginAsync = async (fastify) => {
           } catch {
             return false;
           }
-        }).length;
-      if (groupRefs > 0) throw new HttpError(409, `Provider is still referenced by ${groupRefs} policy group(s)`);
+        })
+        .map((group) => group.name);
+      if (groupRefs.length > 0) {
+        return reply.code(409).send({
+          error: `Provider is still referenced by policy group(s): ${groupRefs.join(', ')}`,
+          groups: groupRefs,
+        });
+      }
 
       db.prepare('DELETE FROM providers WHERE id = ?').run(id);
       return { ok: true };

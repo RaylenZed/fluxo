@@ -24,6 +24,11 @@ interface Provider {
   updated_at: string;
 }
 
+type ApiErrorBody = {
+  error?: string;
+  groups?: string[];
+};
+
 function useProviders() {
   return useQuery({
     queryKey: ["providers"],
@@ -87,11 +92,17 @@ export default function ProvidersPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/providers/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as ApiErrorBody;
+        if (Array.isArray(body.groups) && body.groups.length > 0) {
+          throw new Error(t.providers.providerInUse.replace("{groups}", body.groups.join(", ")));
+        }
+        throw new Error(body.error || t.providers.providerDeleteFailed);
+      }
       return res.json();
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["providers"] }); toast.success(t.providers.providerDeleted); },
-    onError: () => toast.error(t.providers.providerDeleteFailed),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t.providers.providerDeleteFailed),
   });
 
   const openNew = () => {
