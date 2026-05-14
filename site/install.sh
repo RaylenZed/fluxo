@@ -508,13 +508,23 @@ install_fluxo() {
     || die "Server dependencies are incomplete — try rerunning with NPM_REGISTRY=https://registry.npmmirror.com"
 
   log_detail "Building applications..."
-  pnpm turbo build 2>&1 | grep -E "✓|error|warn" | head -20 | while read -r line; do log_detail "$line"; done
+  local build_log
+  build_log="$(mktemp /tmp/fluxo-build-XXXXXX.log)"
+  if ! pnpm turbo build >"$build_log" 2>&1; then
+    log_error "Fluxo build failed. Last build log lines:"
+    tail -80 "$build_log" | while read -r line; do log_detail "$line"; done
+    rm -f "$build_log"
+    die "Fluxo build failed"
+  fi
+  grep -E "✓|error|warn|Compiled|build|Copied static assets" "$build_log" | tail -30 | while read -r line; do log_detail "$line"; done || true
+  rm -f "$build_log"
 
   log_info "Fluxo built successfully"
 
   # Copy static assets into Next.js standalone output (required for standalone mode)
   local web_standalone="${INSTALL_DIR}/apps/web/.next/standalone/apps/web"
   log_detail "Copying static assets to standalone output..."
+  rm -rf "${web_standalone}/public" "${web_standalone}/.next/static"
   cp -r "${INSTALL_DIR}/apps/web/public" "${web_standalone}/public" 2>/dev/null || true
   mkdir -p "${web_standalone}/.next"
   cp -r "${INSTALL_DIR}/apps/web/.next/static" "${web_standalone}/.next/static" 2>/dev/null || true
