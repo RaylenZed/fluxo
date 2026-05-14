@@ -24,7 +24,7 @@ export async function onRequest(context) {
   // Inject default CN proxies right after `set -euo pipefail`
   script = script.replace(
     'set -euo pipefail',
-    'set -euo pipefail\n\n# CN defaults — auto-injected by https://fluxo.click/cn\nGH_PROXY="${GH_PROXY:-https://gh-proxy.com/}"\nNPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"'
+    'set -euo pipefail\n\n# CN defaults — auto-injected by https://fluxo.click/cn\nGH_PROXY="${GH_PROXY:-https://ghfast.top/}"\nNPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"'
   );
 
   return new Response(script, {

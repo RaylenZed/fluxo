@@ -12,15 +12,18 @@ SERVICE_FILE="/etc/systemd/system/mihomo.service"
 SERVICE_NAME="mihomo"
 LATEST_VERSION_API="https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
 SCRIPT_PATH="$(realpath "$0")"
-SCRIPT_VERSION="3.0.0"
+SCRIPT_VERSION="3.0.1"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/fluxo-cli.sh"
 SCRIPT_VERSION_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/version"
+DEFAULT_GH_PROXY="https://ghfast.top/"
 
 # GitHub proxy — set GH_PROXY env var or configure via menu
 GH_PROXY="${GH_PROXY:-}"
 
 # Prepend GH_PROXY to a github.com URL (no-op if proxy is empty)
 gh_url() { echo "${GH_PROXY}${1}"; }
+
+default_gh_url() { echo "${DEFAULT_GH_PROXY}${1}"; }
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
@@ -1411,14 +1414,18 @@ menu_self_update() {
 
     local latest_ver
     latest_ver=$(curl -fsSL --max-time 30 "$(gh_url "$SCRIPT_VERSION_URL")" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$latest_ver" ] && [ -z "$GH_PROXY" ]; then
+        warn "直连失败，尝试默认代理: ${DEFAULT_GH_PROXY}"
+        latest_ver=$(curl -fsSL --max-time 30 "$(default_gh_url "$SCRIPT_VERSION_URL")" 2>/dev/null | tr -d '[:space:]')
+    fi
 
     if [ -z "$latest_ver" ]; then
         error "无法获取版本信息"
         echo ""
-        warn "可能原因：raw.githubusercontent.com 网络延迟过高，可稍后重试"
+        warn "可能原因：raw.githubusercontent.com 或代理网络延迟过高，可稍后重试"
         warn "或手动更新："
         echo ""
-        echo "  curl -Lo $SCRIPT_PATH $SCRIPT_RAW_URL && chmod +x $SCRIPT_PATH"
+        echo "  curl -Lo $SCRIPT_PATH $(default_gh_url "$SCRIPT_RAW_URL") && chmod +x $SCRIPT_PATH"
         pause; return
     fi
 
@@ -1439,7 +1446,14 @@ menu_self_update() {
     local tmp_script
     tmp_script=$(mktemp /tmp/mihomo-manager-XXXXXX.sh)
 
-    if curl -fsSL --max-time 60 -o "$tmp_script" "$(gh_url "$SCRIPT_RAW_URL")"; then
+    local script_url
+    script_url="$(gh_url "$SCRIPT_RAW_URL")"
+    if ! curl -fsSL --max-time 60 -o "$tmp_script" "$script_url" && [ -z "$GH_PROXY" ]; then
+        warn "直连下载失败，尝试默认代理: ${DEFAULT_GH_PROXY}"
+        curl -fsSL --max-time 60 -o "$tmp_script" "$(default_gh_url "$SCRIPT_RAW_URL")"
+    fi
+
+    if [ -s "$tmp_script" ]; then
         if ! bash -n "$tmp_script" 2>/dev/null; then
             error "下载的文件校验失败，已中止更新"
             rm -f "$tmp_script"; pause; return
@@ -1459,7 +1473,7 @@ menu_self_update() {
         error "下载失败，更新已中止"
         warn "可手动更新："
         echo ""
-        echo "  curl -Lo $SCRIPT_PATH $SCRIPT_RAW_URL && chmod +x $SCRIPT_PATH"
+        echo "  curl -Lo $SCRIPT_PATH $(default_gh_url "$SCRIPT_RAW_URL") && chmod +x $SCRIPT_PATH"
         pause
     fi
 }
@@ -2288,10 +2302,10 @@ menu_gh_proxy() {
 
     echo ""
     echo -e "  代理 URL 将被拼接在 GitHub URL 前面，例如:"
-    echo -e "  ${DIM}https://gh-proxy.com/https://github.com/...${NC}"
+    echo -e "  ${DIM}${DEFAULT_GH_PROXY}https://github.com/...${NC}"
     echo ""
     echo -e "  常用公共代理:"
-    echo -e "  ${CYAN}https://gh-proxy.com/${NC}"
+    echo -e "  ${CYAN}${DEFAULT_GH_PROXY}${NC}"
     echo ""
     printf "  输入代理 URL（留空清除，直接回车保持不变）: "
     read -r _input
@@ -2327,4 +2341,3 @@ case "${1:-}" in
     "")         main_menu ;;
     *)          echo "用法: $(basename "$0") [start|stop|restart|status|test|log|log-follow|upgrade]" ;;
 esac
-

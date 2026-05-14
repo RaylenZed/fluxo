@@ -38,8 +38,8 @@ MIHOMO_GITHUB="https://github.com/MetaCubeX/mihomo"
 MIHOMO_SECRET_VALUE="${MIHOMO_SECRET:-}"
 MIHOMO_GZ="${MIHOMO_GZ:-}"
 
-# GitHub proxy — prepended to all github.com URLs (e.g. https://gh-proxy.com/)
-# Can be set via env: GH_PROXY=https://gh-proxy.com/ bash install.sh
+# GitHub proxy — prepended to all github.com URLs (e.g. https://ghfast.top/)
+# Can be set via env: GH_PROXY=https://ghfast.top/ bash install.sh
 GH_PROXY="${GH_PROXY:-}"
 
 # Pipe mode detection — stdin is not a terminal when running via curl | bash
@@ -161,7 +161,7 @@ ask_proxy() {
 
   # Interactive mode — prompt the user
   echo -e "  ${BOLD}GitHub 下载代理${NC}（国内服务器推荐，留空跳过）"
-  echo -e "  ${CYAN}例如: https://gh-proxy.com/${NC}"
+  echo -e "  ${CYAN}例如: https://ghfast.top/${NC}"
   echo -en "  代理 URL: "
   local _proxy_input=""
   read -r _proxy_input
@@ -469,7 +469,7 @@ install_fluxo() {
 
   mkdir -p "$INSTALL_DIR"
 
-  # Use tarball download when GH_PROXY is set (gh-proxy.com doesn't support git protocol);
+  # Use tarball download when GH_PROXY is set (GitHub proxies usually don't support git protocol);
   # also fall back to tarball if git clone fails (common on CN servers with GitHub instability).
   local clone_ok=false
   if [[ -z "$GH_PROXY" ]] && command -v git &>/dev/null; then
@@ -478,7 +478,7 @@ install_fluxo() {
       clone_ok=true
     else
       log_warn "git clone failed — falling back to tarball download"
-      log_detail "Tip: set GH_PROXY=https://gh-proxy.com/ to speed up downloads in CN regions"
+      log_detail "Tip: set GH_PROXY=https://ghfast.top/ to speed up downloads in CN regions"
       rm -rf "$INSTALL_DIR"
       mkdir -p "$INSTALL_DIR"
     fi
@@ -490,7 +490,7 @@ install_fluxo() {
     tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
     tmptar="$(mktemp)"
-    curl -fsSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://gh-proxy.com/"
+    curl -fsSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://ghfast.top/"
     tar -xzf "$tmptar" --strip-components=1 -C "$INSTALL_DIR"
     rm -f "$tmptar"
   fi
@@ -817,7 +817,7 @@ case "${1:-install}" in
     echo "  MIHOMO_GZ        Local Mihomo .gz archive path; skips network download"
     echo "  WEB_PORT         Web UI port (default: 8080)"
     echo "  SERVER_PORT      API server port (default: 8090)"
-    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)"
+    echo "  GH_PROXY         GitHub proxy URL (e.g. https://ghfast.top/)"
     echo "  NPM_REGISTRY     npm registry URL (e.g. https://registry.npmmirror.com for CN)"
     echo ""
     echo "Examples:"
@@ -825,7 +825,7 @@ case "${1:-install}" in
     echo "  curl -fsSL https://fluxo.click | sudo bash"
     echo ""
     echo "  # With GitHub proxy (for regions with slow GitHub access)"
-    echo "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://gh-proxy.com/ bash"
+    echo "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://ghfast.top/ bash"
     echo ""
     echo "  # Use local Mihomo core archive"
     echo "  sudo MIHOMO_GZ=/root/mihomo-linux-amd64-v1.19.10.gz bash install.sh"
