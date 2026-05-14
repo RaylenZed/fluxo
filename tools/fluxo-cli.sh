@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  Fluxo CLI - Mihomo 代理服务管理工具
+#  Fluxo CLI - Fluxo / Mihomo 服务管理工具
 #  项目地址: https://github.com/RaylenZed/fluxo.click
 # ============================================================
 
@@ -10,9 +10,11 @@ CONFIG_DIR="/etc/mihomo"
 CONFIG_FILE="$CONFIG_DIR/config.yaml"
 SERVICE_FILE="/etc/systemd/system/mihomo.service"
 SERVICE_NAME="mihomo"
+FLUXO_API_SERVICE="fluxo"
+FLUXO_WEB_SERVICE="fluxo-web"
 LATEST_VERSION_API="https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
 SCRIPT_PATH="$(realpath "$0")"
-SCRIPT_VERSION="3.0.1"
+SCRIPT_VERSION="3.0.2"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/fluxo-cli.sh"
 SCRIPT_VERSION_URL="https://raw.githubusercontent.com/RaylenZed/fluxo.click/main/tools/version"
 DEFAULT_GH_PROXY="https://ghfast.top/"
@@ -81,8 +83,43 @@ require_root() {
 }
 
 # ── 状态摘要 ─────────────────────────────────────────────────
+_service_exists() {
+    local svc="$1" state
+    state=$(systemctl show -p LoadState --value "$svc" 2>/dev/null)
+    [ -n "$state" ] && [ "$state" != "not-found" ]
+}
+
+_service_state_label() {
+    local svc="$1"
+    if ! _service_exists "$svc"; then
+        echo -e "${DIM}未安装${NC}"
+    elif systemctl is-active "$svc" >/dev/null 2>&1; then
+        echo -e "${GREEN}运行中${NC}"
+    else
+        echo -e "${RED}已停止${NC}"
+    fi
+}
+
+_service_enabled_label() {
+    local svc="$1"
+    if ! _service_exists "$svc"; then
+        echo -e "${DIM}未安装${NC}"
+    elif systemctl is-enabled "$svc" >/dev/null 2>&1; then
+        echo -e "${GREEN}已启用${NC}"
+    else
+        echo -e "${YELLOW}未启用${NC}"
+    fi
+}
+
+_service_env_value() {
+    local svc="$1" key="$2"
+    systemctl show "$svc" -p Environment --value 2>/dev/null \
+        | tr ' ' '\n' \
+        | awk -F= -v k="$key" '$1 == k {print $2; exit}'
+}
+
 _status_bar() {
-    local svc ver tun ts
+    local svc ver tun ts fluxo_api fluxo_web
 
     if systemctl is-active "$SERVICE_NAME" >/dev/null 2>&1; then
         svc="${GREEN}运行中${NC}"
@@ -104,7 +141,11 @@ _status_bar() {
     [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" = "0" ] \
         && ipv6="${GREEN}已启用${NC}" || ipv6="${YELLOW}已禁用${NC}"
 
+    fluxo_api=$(_service_state_label "$FLUXO_API_SERVICE")
+    fluxo_web=$(_service_state_label "$FLUXO_WEB_SERVICE")
+
     echo -e "  Mihomo: $svc  版本: ${CYAN}$ver${NC}  TUN: $tun  Tailscale: $ts  IPv6: $ipv6"
+    echo -e "  Fluxo:  API: $fluxo_api  Web: $fluxo_web"
 }
 
 # ════════════════════════════════════════════════════════════
@@ -147,7 +188,7 @@ main_menu() {
         echo -e "  ${BOLD}诊断与监控${NC}"
         divider
         echo "  9. 网络连通性测试"
-        echo " 10. 查看日志"
+        echo " 10. Mihomo 日志"
         echo ""
         divider
         echo -e "  ${BOLD}Tailscale${NC}"
@@ -169,6 +210,7 @@ main_menu() {
         else
             echo -e " 19. GitHub 代理          ${DIM}（未设置）${NC}"
         fi
+        echo -e " 20. Fluxo 服务管理       ${_root_tag}"
         echo "  0. 退出"
         divider
         echo ""
@@ -195,6 +237,7 @@ main_menu() {
             17) menu_self_update ;;
             18) menu_uninstall ;;
             19) menu_gh_proxy ;;
+            20) menu_fluxo_manage ;;
             0)  clear; echo "  再见！"; exit 0 ;;
             *)  error "无效选项，请重新输入"; sleep 1 ;;
         esac
@@ -309,6 +352,175 @@ menu_autostart() {
         [ "$c" = "1" ] && systemctl enable "$SERVICE_NAME" && info "已设为开机自启"
     fi
     pause
+}
+
+# ════════════════════════════════════════════════════════════
+#  Fluxo 服务管理
+# ════════════════════════════════════════════════════════════
+_fluxo_api_port() {
+    local port
+    port=$(_service_env_value "$FLUXO_API_SERVICE" "PORT")
+    echo "${port:-8090}"
+}
+
+_fluxo_web_port() {
+    local port
+    port=$(_service_env_value "$FLUXO_WEB_SERVICE" "PORT")
+    echo "${port:-8080}"
+}
+
+_fluxo_status_summary() {
+    local api_state web_state api_enabled web_enabled api_port web_port ip
+    api_state=$(_service_state_label "$FLUXO_API_SERVICE")
+    web_state=$(_service_state_label "$FLUXO_WEB_SERVICE")
+    api_enabled=$(_service_enabled_label "$FLUXO_API_SERVICE")
+    web_enabled=$(_service_enabled_label "$FLUXO_WEB_SERVICE")
+    api_port=$(_fluxo_api_port)
+    web_port=$(_fluxo_web_port)
+    ip=$(_local_ip)
+
+    echo -e "  API 服务:  $api_state  自启: $api_enabled  端口: ${CYAN}${api_port}${NC}"
+    echo -e "  Web 服务:  $web_state  自启: $web_enabled  端口: ${CYAN}${web_port}${NC}"
+    echo -e "  访问地址:  ${CYAN}http://${ip}:${web_port}${NC}"
+}
+
+_fluxo_start_services() {
+    systemctl start "$FLUXO_API_SERVICE" && info "Fluxo API 已启动" || error "Fluxo API 启动失败"
+    sleep 1
+    systemctl start "$FLUXO_WEB_SERVICE" && info "Fluxo Web 已启动" || error "Fluxo Web 启动失败"
+}
+
+_fluxo_stop_services() {
+    systemctl stop "$FLUXO_WEB_SERVICE" && info "Fluxo Web 已停止" || warn "Fluxo Web 停止失败或未运行"
+    systemctl stop "$FLUXO_API_SERVICE" && info "Fluxo API 已停止" || warn "Fluxo API 停止失败或未运行"
+}
+
+_fluxo_restart_services() {
+    systemctl restart "$FLUXO_API_SERVICE" && info "Fluxo API 已重启" || error "Fluxo API 重启失败"
+    sleep 1
+    systemctl restart "$FLUXO_WEB_SERVICE" && info "Fluxo Web 已重启" || error "Fluxo Web 重启失败"
+}
+
+menu_fluxo_status() {
+    clear
+    title "Fluxo 运行状态"
+    _fluxo_status_summary
+    echo ""
+    divider
+    echo ""
+    echo -e "${BOLD}Fluxo API:${NC}"
+    systemctl status "$FLUXO_API_SERVICE" --no-pager -l 2>/dev/null | tail -10 || true
+    echo ""
+    echo -e "${BOLD}Fluxo Web:${NC}"
+    systemctl status "$FLUXO_WEB_SERVICE" --no-pager -l 2>/dev/null | tail -10 || true
+    pause
+}
+
+menu_fluxo_start() {
+    require_root || { pause; return; }
+    clear
+    title "启动 Fluxo"
+    _fluxo_start_services
+    echo ""
+    _fluxo_status_summary
+    pause
+}
+
+menu_fluxo_stop() {
+    require_root || { pause; return; }
+    clear
+    title "停止 Fluxo"
+    ask "确定要停止 Fluxo API 和 Web 服务吗？" n || return
+    _fluxo_stop_services
+    pause
+}
+
+menu_fluxo_restart() {
+    require_root || { pause; return; }
+    clear
+    title "重启 Fluxo"
+    _fluxo_restart_services
+    echo ""
+    _fluxo_status_summary
+    pause
+}
+
+menu_fluxo_autostart() {
+    require_root || { pause; return; }
+    clear
+    title "Fluxo 开机自启"
+    _fluxo_status_summary
+    echo ""
+    echo "  1. 启用 API + Web 开机自启"
+    echo "  2. 禁用 API + Web 开机自启"
+    echo "  0. 返回"
+    echo ""
+    printf "  请输入选项: "
+    read -r c
+    case "$c" in
+        1)
+            systemctl enable "$FLUXO_API_SERVICE" "$FLUXO_WEB_SERVICE" && info "Fluxo 开机自启已启用" || error "设置失败"
+            ;;
+        2)
+            systemctl disable "$FLUXO_WEB_SERVICE" "$FLUXO_API_SERVICE" && info "Fluxo 开机自启已禁用" || error "设置失败"
+            ;;
+        0) return ;;
+        *) error "无效选项" ;;
+    esac
+    pause
+}
+
+menu_fluxo_log() {
+    while true; do
+        clear
+        title "Fluxo 日志"
+        echo "  1. API 最近 100 条"
+        echo "  2. Web 最近 100 条"
+        echo "  3. API + Web 最近 100 条"
+        echo "  4. API + Web 实时日志（Ctrl+C 退出后按 Enter 返回）"
+        echo "  0. 返回"
+        echo ""
+        printf "  请输入选项: "
+        read -r c
+        case "$c" in
+            1) clear; journalctl -u "$FLUXO_API_SERVICE" --no-pager -n 100; pause ;;
+            2) clear; journalctl -u "$FLUXO_WEB_SERVICE" --no-pager -n 100; pause ;;
+            3) clear; journalctl -u "$FLUXO_API_SERVICE" -u "$FLUXO_WEB_SERVICE" --no-pager -n 100; pause ;;
+            4) clear; journalctl -u "$FLUXO_API_SERVICE" -u "$FLUXO_WEB_SERVICE" -f; pause ;;
+            0) return ;;
+            *) error "无效选项"; sleep 1 ;;
+        esac
+    done
+}
+
+menu_fluxo_manage() {
+    while true; do
+        clear
+        title "Fluxo 服务管理"
+        _fluxo_status_summary
+        echo ""
+        divider
+        echo "  1. 查看状态"
+        echo -e "  2. 启动 Fluxo API + Web     ${YELLOW}[需要root]${NC}"
+        echo -e "  3. 停止 Fluxo API + Web     ${YELLOW}[需要root]${NC}"
+        echo -e "  4. 重启 Fluxo API + Web     ${YELLOW}[需要root]${NC}"
+        echo -e "  5. 开机自启设置             ${YELLOW}[需要root]${NC}"
+        echo "  6. 查看 Fluxo 日志"
+        echo "  0. 返回"
+        echo ""
+        printf "  请输入选项: "
+        read -r c
+        case "$c" in
+            1) menu_fluxo_status ;;
+            2) menu_fluxo_start ;;
+            3) menu_fluxo_stop ;;
+            4) menu_fluxo_restart ;;
+            5) menu_fluxo_autostart ;;
+            6) menu_fluxo_log ;;
+            0) return ;;
+            *) error "无效选项"; sleep 1 ;;
+        esac
+    done
 }
 
 # ════════════════════════════════════════════════════════════
@@ -1018,7 +1230,7 @@ menu_test() {
 menu_log() {
     while true; do
         clear
-        title "查看日志"
+        title "Mihomo 日志"
         echo "  1. 最近 50 条"
         echo "  2. 最近 100 条"
         echo "  3. 实时日志（Ctrl+C 退出后按 Enter 返回）"
@@ -2337,7 +2549,14 @@ case "${1:-}" in
     test)       menu_test ;;
     log)        journalctl -u "$SERVICE_NAME" --no-pager -n "${2:-50}" ;;
     log-follow) journalctl -u "$SERVICE_NAME" -f ;;
+    fluxo)      menu_fluxo_manage ;;
+    fluxo-status) menu_fluxo_status ;;
+    fluxo-start) require_root && _fluxo_start_services ;;
+    fluxo-stop) require_root && _fluxo_stop_services ;;
+    fluxo-restart) require_root && _fluxo_restart_services ;;
+    fluxo-log)  journalctl -u "$FLUXO_API_SERVICE" -u "$FLUXO_WEB_SERVICE" --no-pager -n "${2:-100}" ;;
+    fluxo-log-follow) journalctl -u "$FLUXO_API_SERVICE" -u "$FLUXO_WEB_SERVICE" -f ;;
     upgrade)    require_root && curl -fsSL https://fluxo.click | bash ;;
     "")         main_menu ;;
-    *)          echo "用法: $(basename "$0") [start|stop|restart|status|test|log|log-follow|upgrade]" ;;
+    *)          echo "用法: $(basename "$0") [start|stop|restart|status|test|log|log-follow|fluxo|fluxo-status|fluxo-start|fluxo-stop|fluxo-restart|fluxo-log|fluxo-log-follow|upgrade]" ;;
 esac

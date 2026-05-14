@@ -596,7 +596,7 @@ async function fetchSubscription(url: string): Promise<string> {
     maxContentLength: 8 * 1024 * 1024,
     transformResponse: (data) => data,
     headers: {
-      'User-Agent': 'Fluxo/0.1.1',
+      'User-Agent': 'Fluxo/0.1.2',
       Accept: 'text/plain, application/x-yaml, application/yaml, */*',
     },
   });
