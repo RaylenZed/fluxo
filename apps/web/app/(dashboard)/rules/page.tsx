@@ -65,7 +65,11 @@ interface Rule {
   policy: string;
   matches: number;
   note: string;
+  notify: boolean;
+  extendedMatch: boolean;
 }
+
+type RuleFormData = Pick<Rule, "type" | "value" | "policy" | "note">;
 
 const RULE_TYPES: RuleType[] = [
   "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-WILDCARD", "DOMAIN-SET",
@@ -89,6 +93,8 @@ function rowToRule(row: RuleRow): Rule {
     policy: row.policy,
     matches: 0,
     note: row.note ?? "",
+    notify: Boolean(row.notify),
+    extendedMatch: Boolean(row.extended_matching),
   };
 }
 
@@ -134,12 +140,18 @@ function SortableRuleRow({
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className="group relative">
+    <tr
+      ref={setNodeRef}
+      style={style}
+      onClick={() => onEdit(rule)}
+      className="group relative cursor-pointer hover:bg-[var(--surface-2)]/60"
+    >
       <td className="w-12 pl-3 pr-1 py-2.5">
         <div className="flex items-center gap-1.5">
           <button
             {...attributes}
             {...listeners}
+            onClick={(event) => event.stopPropagation()}
             className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-[var(--muted)] hover:text-[var(--foreground)] transition-opacity"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -176,7 +188,8 @@ function SortableRuleRow({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="opacity-0 group-hover:opacity-100 h-6 w-6 text-[var(--muted)]"
+              onClick={(event) => event.stopPropagation()}
+              className="h-6 w-6 text-[var(--muted)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
@@ -255,7 +268,7 @@ function RuleDialog({
   onClose: () => void;
   editingRule?: Rule;
   policies: string[];
-  onSave: (rule: Omit<Rule, "id" | "matches">, notify: boolean, extendedMatch: boolean) => void;
+  onSave: (rule: RuleFormData, notify: boolean, extendedMatch: boolean) => void;
 }) {
   const { t } = useLocale();
   const rT = t.rules;
@@ -264,8 +277,8 @@ function RuleDialog({
   const [value, setValue] = useState(editingRule?.value ?? "");
   const [policy, setPolicy] = useState(editingRule?.policy ?? "Proxy");
   const [note, setNote] = useState(editingRule?.note ?? "");
-  const [sendNotif, setSendNotif] = useState(false);
-  const [extendedMatch, setExtendedMatch] = useState(false);
+  const [sendNotif, setSendNotif] = useState(Boolean(editingRule?.notify));
+  const [extendedMatch, setExtendedMatch] = useState(Boolean(editingRule?.extendedMatch));
   const [resolveDns, setResolveDns] = useState(false);
 
   const isDomain = type.startsWith("DOMAIN");
@@ -648,7 +661,7 @@ export default function RulesPage() {
   }
 
   function handleSaveRule(
-    data: Omit<Rule, "id" | "matches">,
+    data: RuleFormData,
     notify: boolean,
     extendedMatch: boolean
   ) {
@@ -674,8 +687,8 @@ export default function RulesPage() {
       value: rule.value,
       policy: rule.policy,
       note: rule.note ? `${rule.note} (copy)` : undefined,
-      notify: 0,
-      extended_matching: 0,
+      notify: rule.notify ? 1 : 0,
+      extended_matching: rule.extendedMatch ? 1 : 0,
     });
   }
 
