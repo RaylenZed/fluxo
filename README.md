@@ -80,6 +80,12 @@ curl -fsSL https://fluxo.click | sudo bash
 curl -fsSL https://fluxo.click/cn | bash
 ```
 
+如果 Mihomo 核心下载慢，可以提前下载对应架构的 `.gz` 包，安装时选择本地路径；也可以直接用环境变量跳过网络下载：
+
+```bash
+curl -fsSL https://fluxo.click/cn | MIHOMO_GZ=/root/mihomo-linux-amd64-v1.19.10.gz bash
+```
+
 安装后自动创建三个 systemd 服务：
 
 | 服务 | 说明 | 端口 |
@@ -162,6 +168,7 @@ Docker 挂载说明：
 | `WEB_PORT` | `8080` | Web UI 监听端口 |
 | `SERVER_PORT` | `8090` | API 服务监听端口 |
 | `BACKEND_URL` | `http://127.0.0.1:8090` | Web UI 转发 API 请求的地址（与 `SERVER_PORT` 保持一致） |
+| `MIHOMO_GZ` | *(空)* | 仅安装脚本使用；指定本地 Mihomo `.gz` 包，跳过核心下载 |
 
 > **注意**：`MIHOMO_SECRET` 在直接安装时由安装脚本写入 Mihomo 配置和 Fluxo 服务环境；Docker 场景若挂载了 `CONFIG_PATH`，Fluxo 会读取配置中的非空 `secret`，也可以显式传入 `MIHOMO_SECRET`。
 

@@ -36,6 +36,7 @@ SERVER_PORT="${SERVER_PORT:-8090}"
 REPO_URL="https://github.com/RaylenZed/fluxo.click"
 MIHOMO_GITHUB="https://github.com/MetaCubeX/mihomo"
 MIHOMO_SECRET_VALUE="${MIHOMO_SECRET:-}"
+MIHOMO_GZ="${MIHOMO_GZ:-}"
 
 # GitHub proxy — prepended to all github.com URLs (e.g. https://gh-proxy.com/)
 # Can be set via env: GH_PROXY=https://gh-proxy.com/ bash install.sh
@@ -76,10 +77,21 @@ confirm() {
   echo -en "${YELLOW}  ?${NC}  ${prompt} [y/N] "
   local answer=""
   # Always read from /dev/tty for user prompts; default to N if unavailable
-  if read -r answer < /dev/tty 2>/dev/null; then
+  if read -r answer 2>/dev/null < /dev/tty; then
     [[ "$answer" =~ ^[Yy]$ ]]
   else
     echo "(defaulting to N)"
+    return 1
+  fi
+}
+
+prompt_input() {
+  local prompt="$1"
+  local answer=""
+  echo -en "${YELLOW}  ?${NC}  ${prompt} " 2>/dev/null > /dev/tty || true
+  if read -r answer 2>/dev/null < /dev/tty; then
+    printf '%s\n' "$answer"
+  else
     return 1
   fi
 }
@@ -197,7 +209,7 @@ check_dependencies() {
   log_step "Checking system dependencies"
   local missing=()
 
-  for cmd in curl tar systemctl python3 make g++; do
+  for cmd in curl tar gzip systemctl python3 make g++; do
     if command -v "$cmd" &>/dev/null; then
       log_info "Found: $cmd"
     else
@@ -243,6 +255,57 @@ check_dependencies() {
 
 # ─── 4. install_mihomo ────────────────────────────────────────────────────────
 
+copy_local_mihomo_archive() {
+  local source="$1"
+  local dest="$2"
+  local expected="$3"
+
+  [[ -n "$source" ]] || die "Local Mihomo archive path is empty."
+  [[ -f "$source" ]] || die "Local Mihomo archive not found: $source"
+  [[ -r "$source" ]] || die "Local Mihomo archive is not readable: $source"
+
+  local base
+  base="$(basename "$source")"
+  if [[ "$base" != "$expected" ]]; then
+    log_warn "Archive name is ${base}; expected ${expected} for ${OS}/${ARCH}/${MIHOMO_VERSION}"
+    log_detail "Continuing anyway; gzip extraction will validate the file."
+  fi
+
+  cp "$source" "$dest" || die "Failed to copy local Mihomo archive: $source"
+  log_info "Using local Mihomo archive: $source"
+}
+
+download_mihomo_archive() {
+  local filename="$1"
+  local dest="$2"
+  local url
+  url="$(gh_url "${MIHOMO_GITHUB}/releases/download/${MIHOMO_VERSION}/${filename}")"
+
+  log_detail "Downloading from: $url"
+  if ! curl -fSL --progress-bar -o "$dest" "$url"; then
+    die "Failed to download Mihomo. Check version and network connectivity."
+  fi
+}
+
+prepare_mihomo_archive() {
+  local filename="$1"
+  local dest="$2"
+
+  if [[ -n "$MIHOMO_GZ" ]]; then
+    copy_local_mihomo_archive "$MIHOMO_GZ" "$dest" "$filename"
+    return 0
+  fi
+
+  if confirm "Use a local Mihomo .gz archive instead of downloading?"; then
+    local local_path=""
+    local_path="$(prompt_input "Local .gz path:")" || die "Cannot read local archive path. Set MIHOMO_GZ=/path/to/file.gz and retry."
+    copy_local_mihomo_archive "$local_path" "$dest" "$filename"
+    return 0
+  fi
+
+  download_mihomo_archive "$filename" "$dest"
+}
+
 install_mihomo() {
   log_step "Installing Mihomo core (${MIHOMO_VERSION})"
 
@@ -258,23 +321,23 @@ install_mihomo() {
     log_detail "Will upgrade from ${current_ver} to ${MIHOMO_VERSION}"
   fi
 
-  # Build download URL
   local filename="mihomo-${OS}-${ARCH}-${MIHOMO_VERSION}.gz"
-  local url
-  url="$(gh_url "${MIHOMO_GITHUB}/releases/download/${MIHOMO_VERSION}/${filename}")"
-
-  log_detail "Downloading from: $url"
+  local binary_name="mihomo-${OS}-${ARCH}-${MIHOMO_VERSION}"
   local tmpdir=""
   tmpdir="$(mktemp -d)"
+  local archive_path="${tmpdir}/${filename}"
 
-  if ! curl -fSL --progress-bar -o "${tmpdir}/${filename}" "$url"; then
+  if ! prepare_mihomo_archive "$filename" "$archive_path"; then
     rm -rf "$tmpdir"
-    die "Failed to download Mihomo. Check version and network connectivity."
+    die "Failed to prepare Mihomo archive."
   fi
 
   log_detail "Extracting binary..."
-  gunzip -f "${tmpdir}/${filename}"
-  local binary_name="mihomo-${OS}-${ARCH}-${MIHOMO_VERSION}"
+  if ! gzip -dc "$archive_path" > "${tmpdir}/${binary_name}"; then
+    rm -rf "$tmpdir"
+    die "Failed to extract Mihomo archive. Check that the file is a valid .gz archive."
+  fi
+
   mv "${tmpdir}/${binary_name}" "$MIHOMO_BINARY"
   chmod +x "$MIHOMO_BINARY"
   rm -rf "$tmpdir"
@@ -762,6 +825,7 @@ run_installer() {
   echo -e "  API server port  : ${CYAN}${SERVER_PORT}${NC}"
   echo -e "  Install dir      : ${CYAN}${INSTALL_DIR}${NC}"
   echo -e "  Data dir         : ${CYAN}${DATA_DIR}${NC}"
+  echo -e "  Mihomo archive   : ${CYAN}${MIHOMO_GZ:-（download）}${NC}"
   echo -e "  GitHub proxy     : ${CYAN}${GH_PROXY:-（none）}${NC}"
   echo -e "  npm registry     : ${CYAN}${NPM_REGISTRY:-（default）}${NC}"
   echo -e ""
@@ -794,10 +858,11 @@ case "${1:-install}" in
     echo ""
     echo "Environment variables:"
     echo "  MIHOMO_VERSION   Mihomo version to install (default: v1.19.10)"
+    echo "  MIHOMO_GZ        Local Mihomo .gz archive path; skips network download"
     echo "  WEB_PORT         Web UI port (default: 8080)"
     echo "  SERVER_PORT      API server port (default: 8090)"
-    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)
-  NPM_REGISTRY     npm registry URL (e.g. https://registry.npmmirror.com for CN)"
+    echo "  GH_PROXY         GitHub proxy URL (e.g. https://gh-proxy.com/)"
+    echo "  NPM_REGISTRY     npm registry URL (e.g. https://registry.npmmirror.com for CN)"
     echo ""
     echo "Examples:"
     echo "  # Standard install"
@@ -805,6 +870,10 @@ case "${1:-install}" in
     echo ""
     echo "  # With GitHub proxy (for regions with slow GitHub access)"
     echo "  curl -fsSL https://fluxo.click | sudo GH_PROXY=https://gh-proxy.com/ bash"
+    echo ""
+    echo "  # Use local Mihomo core archive"
+    echo "  sudo MIHOMO_GZ=/root/mihomo-linux-amd64-v1.19.10.gz bash install.sh"
+    echo "  curl -fsSL https://fluxo.click/cn | MIHOMO_GZ=/root/mihomo-linux-amd64-v1.19.10.gz bash"
     echo ""
     echo "  # Uninstall"
     echo "  curl -fsSL https://fluxo.click | sudo bash -s -- --uninstall"
