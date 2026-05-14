@@ -34,13 +34,15 @@ function useDashboardInfo() {
       ]);
       const settings = settingsRes ?? {};
       const desiredTunEnabled = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
-      const tunEnabled = Boolean(tunRes?.active ?? desiredTunEnabled);
-      const tunMismatch = Boolean((tunRes?.desired ?? desiredTunEnabled) && tunRes && !tunRes.active);
+      const manualMode = settings['fluxo.apply_mode'] !== 'managed';
+      const tunEnabled = manualMode ? desiredTunEnabled : Boolean(tunRes?.active ?? desiredTunEnabled);
+      const tunMismatch = manualMode ? false : Boolean((tunRes?.desired ?? desiredTunEnabled) && tunRes && !tunRes.active);
       return {
         memory: (memRes?.inuse as number) ?? null,
         uptime: (uptimeRes?.uptime as number | null) ?? null,
         tunEnabled,
         tunMismatch,
+        applyMode: manualMode ? 'manual' as const : 'managed' as const,
       };
     },
     refetchInterval: 15_000,
@@ -191,7 +193,7 @@ function StatisticsPanel({
   isRunning,
   version,
 }: {
-  dashInfo: { memory: number | null; uptime: number | null; tunEnabled: boolean; tunMismatch: boolean } | undefined;
+  dashInfo: { memory: number | null; uptime: number | null; tunEnabled: boolean; tunMismatch: boolean; applyMode: 'manual' | 'managed' } | undefined;
   isRunning: boolean;
   version: string | null;
 }) {
@@ -280,7 +282,7 @@ function StatisticsPanel({
           <CardTitle className="text-lg font-bold">{t.dashboardExtra.heroQuickActions}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 pt-0">
-          <button
+          {dashInfo?.applyMode === 'managed' && <button
             onClick={() => restartMihomo.mutate()}
             disabled={restartMihomo.isPending}
             className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--surface-2)] disabled:opacity-50 transition-colors text-left"
@@ -289,7 +291,7 @@ function StatisticsPanel({
               <Power className="h-3.5 w-3.5 text-[var(--brand-500)]" />
             </div>
             <span>{t.dashboardExtra.heroRestart}</span>
-          </button>
+          </button>}
           <button
             onClick={() => updateGeo.mutate()}
             disabled={updateGeo.isPending}

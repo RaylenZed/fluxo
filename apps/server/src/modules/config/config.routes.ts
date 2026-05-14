@@ -5,9 +5,21 @@ import yaml from 'js-yaml';
 import { generateConfig, writeConfigAndReload } from './config.generator';
 import { reloadConfig } from '../mihomo/mihomo.service';
 import { getMihomoConfig } from '../mihomo/mihomo.config';
+import { getSetting } from '../settings/settings.service';
 
 function getConfigPath(): string {
-  return process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
+  if (process.env.CONFIG_PATH) return process.env.CONFIG_PATH;
+  if (getApplyMode() === 'managed') return '/etc/mihomo/config.yaml';
+  return path.join(path.dirname(process.env.DB_PATH || path.join(process.cwd(), 'data', 'fluxo.db')), 'generated.yaml');
+}
+
+function getApplyMode(): 'manual' | 'managed' {
+  const stored = getSetting('fluxo.apply_mode');
+  if (stored === 'managed') return 'managed';
+  if (stored === 'manual') return 'manual';
+
+  const envMode = (process.env.FLUXO_DEFAULT_APPLY_MODE || process.env.FLUXO_APPLY_MODE)?.trim().toLowerCase();
+  return envMode === 'managed' ? 'managed' : 'manual';
 }
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -23,6 +35,8 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 
 export const configRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/config/mode', async () => ({ mode: getApplyMode(), configPath: getConfigPath() }));
+
   // GET /api/config — return current raw YAML on disk (or generated if not exists)
   fastify.get('/config', async (_req, reply) => {
     try {
@@ -52,6 +66,19 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  fastify.get('/config/download', async (_req, reply) => {
+    try {
+      const yaml = await generateConfig();
+      return reply
+        .header('Content-Disposition', 'attachment; filename="mihomo-config.yaml"')
+        .type('application/x-yaml')
+        .send(yaml);
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(500).send({ error: 'Failed to generate config' });
+    }
+  });
+
   // Backward-compatible alias used by older frontend code.
   fastify.get('/config/generate', async (_req, reply) => {
     try {
@@ -63,20 +90,27 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/config/apply — generate from DB, write, reload mihomo
+  // POST /api/config/apply — in managed mode write and reload Mihomo; in manual mode export to Fluxo data path only.
   fastify.post('/config/apply', async (_req, reply) => {
     try {
       const configPath = getConfigPath();
+      if (getApplyMode() === 'manual') {
+        const configDir = path.dirname(configPath);
+        await fs.mkdir(configDir, { recursive: true });
+        await fs.writeFile(configPath, await generateConfig(), 'utf-8');
+        return { ok: true, applied: false, mode: 'manual', configPath };
+      }
+
       const { apiUrl, secret } = getMihomoConfig();
       await writeConfigAndReload(configPath, apiUrl, secret);
-      return { ok: true, configPath };
+      return { ok: true, applied: true, mode: 'managed', configPath };
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: getErrorMessage(err, 'Failed to apply config') });
     }
   });
 
-  // PUT /api/config — save raw YAML and reload mihomo
+  // PUT /api/config — save raw YAML; managed mode also reloads Mihomo.
   fastify.put('/config', async (req, reply) => {
     try {
       const { yaml: body } = req.body as { yaml: string };
@@ -94,6 +128,10 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configPath, body, 'utf-8');
 
+      if (getApplyMode() === 'manual') {
+        return { ok: true, reloaded: false, mode: 'manual' };
+      }
+
       // Reload mihomo (without regenerating the file)
       try {
         await reloadConfig(configPath);
@@ -105,7 +143,7 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
         throw reloadErr;
       }
 
-      return { ok: true };
+      return { ok: true, reloaded: true, mode: 'managed' };
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: 'Failed to save config' });

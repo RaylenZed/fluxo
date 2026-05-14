@@ -145,6 +145,16 @@ export default function SystemPage() {
   const { data: memoryData } = useMihomoMemory();
   const { data: connectionsData } = useMihomoConnections();
   const { data: uptimeData } = useMihomoUptime();
+  const { data: configMode } = useQuery<{ mode: "manual" | "managed" }>({
+    queryKey: ["config-mode"],
+    queryFn: async () => {
+      const res = await fetch(`/api/config/mode`);
+      if (!res.ok) return { mode: "manual" };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const managedMode = configMode?.mode === "managed";
 
   const restartMihomo = useMutation({
     mutationFn: async () => {
@@ -180,7 +190,7 @@ export default function SystemPage() {
             showMemory
             showConnections
             showUptime
-            onRestart={() => restartMihomo.mutate()}
+            onRestart={managedMode ? () => restartMihomo.mutate() : undefined}
             restarting={restartMihomo.isPending}
             t={sysT}
           />

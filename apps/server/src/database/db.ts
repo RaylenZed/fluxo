@@ -123,6 +123,7 @@ function seedDefaults(db: Database.Database) {
     'general.mode': 'rule',
     'general.log_level': 'info',
     'general.ipv6': false,
+    'fluxo.apply_mode': (process.env.FLUXO_DEFAULT_APPLY_MODE || process.env.FLUXO_APPLY_MODE) === 'managed' ? 'managed' : 'manual',
     'tun.enable': false,
     'tun.stack': 'system',
     'tun.auto_route': true,

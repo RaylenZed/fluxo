@@ -18,6 +18,7 @@ type TunStatus = {
   desired: boolean;
   active: boolean;
   status: "active" | "mismatch" | "disabled" | "unknown";
+  applyMode: "manual" | "managed";
 };
 
 function useTunState() {
@@ -25,14 +26,20 @@ function useTunState() {
   const { data: tunStatus } = useQuery<TunStatus>({
     queryKey: ["tun-state"],
     queryFn: async () => {
+      const modeRes = await fetch(`/api/config/mode`);
+      const mode = modeRes.ok ? await modeRes.json() as { mode?: "manual" | "managed" } : null;
+      const applyMode = mode?.mode ?? "manual";
       const r = await fetch(`/api/mihomo/tun/status`);
-      if (r.ok) return r.json();
+      if (r.ok) {
+        const status = await r.json();
+        return { ...status, applyMode };
+      }
 
       const settingsRes = await fetch(`/api/settings`);
-      if (!settingsRes.ok) return { desired: false, active: false, status: "unknown" as const };
+      if (!settingsRes.ok) return { desired: false, active: false, status: "unknown" as const, applyMode };
       const settings = await settingsRes.json();
       const desired = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
-      return { desired, active: false, status: "unknown" as const };
+      return { desired, active: false, status: "unknown" as const, applyMode };
     },
     staleTime: 30_000,
   });
@@ -123,6 +130,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
   const { t } = useLocale();
   const { tunEnabled, tunStatus, toggle } = useTunState();
   const tunMismatch = tunStatus?.desired && !tunStatus.active;
+  const showTunSwitch = tunStatus?.applyMode === "managed";
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-3 bg-[var(--background)]/90 backdrop-blur-md px-5 border-b border-[var(--border)]">
@@ -152,7 +160,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
         {children}
 
         {/* TUN toggle */}
-        <div className="hidden md:flex items-center gap-2 pr-2 border-r border-[var(--border)]">
+        {showTunSwitch && <div className="hidden md:flex items-center gap-2 pr-2 border-r border-[var(--border)]">
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <span
               className={cn("text-xs font-medium", tunMismatch ? "text-amber-600 dark:text-amber-400" : "text-[var(--muted)]")}
@@ -166,7 +174,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
               onCheckedChange={(v) => toggle(v)}
             />
           </label>
-        </div>
+        </div>}
 
         {/* Theme toggle — circular */}
         <button

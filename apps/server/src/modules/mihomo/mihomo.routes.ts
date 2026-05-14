@@ -107,6 +107,22 @@ function readSettingBoolean(key: string, fallback = false): boolean {
   }
 }
 
+function getApplyMode(): 'manual' | 'managed' {
+  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get('fluxo.apply_mode') as { value: string } | undefined;
+  if (row) {
+    try {
+      const stored = JSON.parse(row.value);
+      if (stored === 'managed') return 'managed';
+      if (stored === 'manual') return 'manual';
+    } catch {
+      // Fall through to environment default.
+    }
+  }
+
+  const envMode = (process.env.FLUXO_DEFAULT_APPLY_MODE || process.env.FLUXO_APPLY_MODE)?.trim().toLowerCase();
+  return envMode === 'managed' ? 'managed' : 'manual';
+}
+
 function readCommandOutput(command: string): string | null {
   try {
     return execSync(command, { timeout: 2000, encoding: 'utf8' }).trim();
@@ -212,6 +228,9 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/mihomo/reload', async (req, reply) => {
     try {
+      if (getApplyMode() !== 'managed') {
+        return reply.code(409).send({ error: 'Mihomo reload is disabled in manual apply mode' });
+      }
       const body = (req.body as { configPath?: string }) ?? {};
       const configPath = body.configPath || getConfigPath();
       await reloadConfig(configPath);
@@ -417,6 +436,9 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   // PUT /api/mihomo/mode — switch outbound mode
   fastify.put('/mihomo/mode', async (req, reply) => {
     try {
+      if (getApplyMode() !== 'managed') {
+        return reply.code(409).send({ error: 'Mihomo mode switching is disabled in manual apply mode' });
+      }
       const body = req.body as { mode: 'rule' | 'global' | 'direct' };
       const { apiUrl, secret } = getMihomoConfig();
       await axios.patch(`${apiUrl}/configs`, { mode: body.mode }, { headers: getMihomoHeaders(secret), timeout: 5000 });
@@ -434,10 +456,13 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       const db = getDb();
       const now = new Date().toISOString();
       db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('tun.enable', ?, ?)").run(JSON.stringify(body.enable), now);
+      if (getApplyMode() !== 'managed') {
+        return { ok: true, applied: false, mode: 'manual' };
+      }
       // Apply config immediately so the running Mihomo reflects the change
       const { apiUrl, secret } = getMihomoConfig();
       await writeConfigAndReload(getConfigPath(), apiUrl, secret || undefined).catch(() => { /* ignore if mihomo unreachable */ });
-      return { ok: true };
+      return { ok: true, applied: true, mode: 'managed' };
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: 'Internal server error' });

@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-Fluxo 是面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta) 的可视化配置管理、实时流量监控和系统管理合为一体。支持中英文界面切换。
+Fluxo 是面向 Linux VPS 的现代化 Mihomo (Clash.Meta) 配置工作台。Web 面板专注 Surge-like 可视化配置、订阅拆分、策略组和规则管理；`fluxo-cli` 专注 Mihomo 安装、启停、诊断和卸载。支持中英文界面切换。
 
 ---
 
@@ -22,11 +22,11 @@ Fluxo 是面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta
   - **订阅拆分导入**：从 Clash/Mihomo YAML 或 base64 订阅 URL 导入节点，并拆成可单独编辑、测速和分配到策略组的代理节点
   - 节点编辑 / 删除
   - 策略组：手动选择 / 自动测速 / 故障转移 / 负载均衡
-  - **应用配置**：将 DB 中所有节点、策略组、规则生成 YAML 并热重载 Mihomo
+  - **导出/应用配置**：将 DB 中所有节点、策略组、规则生成标准 Mihomo YAML；默认手动导出，也可切换托管模式自动写入并热重载 Mihomo
 - **规则** — 可视化规则列表，支持拖拽排序、新增、删除
 
 ### 系统配置
-- **设置** — 混合端口、allow-lan、日志级别、IPv6、TUN 模式（即时生效）、远程控制器地址和密钥
+- **设置** — 配置应用模式、混合端口、allow-lan、日志级别、IPv6、TUN 模式、远程控制器地址和密钥
 - **DNS** — Fake-IP / redir-host / normal 模式，上游 DNS、fallback DNS、Fake-IP 过滤列表
 - **配置编辑器** — 直接编辑原始 YAML；保护 8080/8090/9090 等关键端口，修改前警告
 - **订阅** — 代理 Provider 订阅链接管理（URL、更新间隔、健康检查）
@@ -75,10 +75,25 @@ pnpm dev  # Web: http://localhost:38080 | API: http://localhost:8090
 curl -fsSL https://fluxo.click | sudo bash
 ```
 
+默认安装为拆分模式：Mihomo 由 systemd/`fluxo-cli` 管理，Fluxo Web 只生成和导出 YAML，不直接覆盖 `/etc/mihomo/config.yaml`。
+
 国内服务器使用 `/cn` 路径，自动内置 GitHub 代理 + npm 国内源：
 
 ```bash
 curl -fsSL https://fluxo.click/cn | bash
+```
+
+可选模式：
+
+```bash
+# 只安装 Mihomo + fluxo-cli
+curl -fsSL https://fluxo.click/cn | bash -s -- --mihomo-only
+
+# 只安装 Fluxo Web/API，用作配置生成器
+curl -fsSL https://fluxo.click/cn | bash -s -- --web-only
+
+# 旧的一体化模式：Fluxo Web 直接写入并 reload Mihomo
+curl -fsSL https://fluxo.click/cn | bash -s -- --managed
 ```
 
 如果 Mihomo 核心下载慢，可以提前下载对应架构的 `.gz` 包，安装时选择本地路径；也可以直接用环境变量跳过网络下载：
@@ -87,7 +102,7 @@ curl -fsSL https://fluxo.click/cn | bash
 curl -fsSL https://fluxo.click/cn | MIHOMO_GZ=/root/mihomo-linux-amd64-v1.19.10.gz bash
 ```
 
-安装后自动创建三个 systemd 服务：
+默认完整安装后创建三个 systemd 服务，但 Fluxo 与 Mihomo 不再互相绑定：
 
 | 服务 | 说明 | 端口 |
 |------|------|------|
@@ -115,6 +130,7 @@ journalctl -fu fluxo             # API 服务日志
 journalctl -fu fluxo-web         # Web UI 日志
 
 # 配置
+cp /var/lib/fluxo/generated.yaml /etc/mihomo/config.yaml  # 手动导入 Fluxo 生成配置
 nano /etc/mihomo/config.yaml     # 直接编辑配置
 systemctl reload mihomo          # 热重载配置（不中断连接）
 systemctl restart mihomo         # 重启核心

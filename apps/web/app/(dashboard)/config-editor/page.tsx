@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Save, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { Save, RotateCcw, Loader2, AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModeSegment, Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
@@ -99,13 +99,29 @@ export default function ConfigEditorPage() {
     }
   }
 
+  function handleDownload() {
+    const blob = new Blob([yaml], { type: "application/x-yaml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = source === "generated" ? "mihomo-config.yaml" : "mihomo-current.yaml";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleReload() {
     if (source === "raw") {
       if (hasUnsavedChanges && !window.confirm(eT.discardChangesConfirm)) return;
       setReloading(true);
       try {
-        const reloadRes = await fetch("/api/mihomo/reload", { method: "POST" });
-        if (!reloadRes.ok) throw new Error();
+        const modeRes = await fetch("/api/config/mode");
+        const mode = modeRes.ok ? await modeRes.json() as { mode?: string } : null;
+        if (mode?.mode === "managed") {
+          const reloadRes = await fetch("/api/mihomo/reload", { method: "POST" });
+          if (!reloadRes.ok) throw new Error();
+        }
         const configRes = await fetch("/api/config");
         if (!configRes.ok) throw new Error();
         const text = await configRes.text();
@@ -137,6 +153,16 @@ export default function ConfigEditorPage() {
           value={source}
           onChange={(value) => void handleSourceChange(value as ConfigSource)}
         />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDownload}
+          disabled={loading}
+          className="gap-2 text-xs"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {eT.download}
+        </Button>
         <Button
           variant="outline"
           size="sm"

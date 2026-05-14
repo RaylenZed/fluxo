@@ -45,8 +45,12 @@ function useSaveDns() {
       });
       if (!res.ok) throw new Error("Failed to save");
       const saved = await res.json();
-      const applyRes = await fetch(`/api/config/apply`, { method: "POST" });
-      if (!applyRes.ok) throw new Error("Failed to apply");
+      const modeRes = await fetch(`/api/config/mode`);
+      const mode = modeRes.ok ? await modeRes.json() as { mode?: string } : null;
+      if (mode?.mode === "managed") {
+        const applyRes = await fetch(`/api/config/apply`, { method: "POST" });
+        if (!applyRes.ok) throw new Error("Failed to apply");
+      }
       return saved;
     },
     onSuccess: () => {

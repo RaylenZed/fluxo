@@ -13,6 +13,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+async function requestText(path: string, options?: RequestInit): Promise<string> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error: string }).error ?? res.statusText);
+  }
+  return res.text();
+}
+
 // --- Proxy types (matching backend DB rows) ---
 export interface ProxyRow {
   id: string;
@@ -149,7 +161,9 @@ export const settingsApi = {
   update: (data: Record<string, unknown>) =>
     request<{ ok: boolean }>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
   generateConfig: () => request<string>('/api/config/generated'),
-  applyConfig: () => request<{ ok: boolean; configPath: string }>('/api/config/apply', { method: 'POST' }),
+  getConfigMode: () => request<{ mode: 'manual' | 'managed'; configPath: string }>('/api/config/mode'),
+  downloadConfig: () => requestText('/api/config/generated'),
+  applyConfig: () => request<{ ok: boolean; applied: boolean; mode: 'manual' | 'managed'; configPath: string }>('/api/config/apply', { method: 'POST' }),
 };
 
 // --- Profiles ---

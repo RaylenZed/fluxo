@@ -36,15 +36,17 @@ function useSaveSettings() {
       });
       if (!res.ok) throw new Error("Failed to save");
       const saved = await res.json();
-      const applyRes = await fetch(`/api/config/apply`, { method: "POST" });
-      if (!applyRes.ok) throw new Error("Failed to apply");
-      return saved;
+      if (data["fluxo.apply_mode"] === "managed") {
+        const applyRes = await fetch(`/api/config/apply`, { method: "POST" });
+        if (!applyRes.ok) throw new Error("Failed to apply");
+      }
+      return { saved, applied: data["fluxo.apply_mode"] === "managed" };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["tun-state"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "info"] });
-      toast.success("Settings saved and applied");
+      toast.success(result.applied ? "Settings saved and applied" : "Settings saved");
     },
     onError: () => toast.error("Failed to save or apply settings"),
   });
@@ -84,6 +86,7 @@ export default function SettingsPage() {
   const [allowLAN, setAllowLAN] = useState(false);
   const [logLevel, setLogLevel] = useState("info");
   const [ipv6, setIpv6] = useState(false);
+  const [applyMode, setApplyMode] = useState("manual");
 
   // TUN
   const [tunEnable, setTunEnable] = useState(false);
@@ -102,6 +105,7 @@ export default function SettingsPage() {
     if (settings["general.allow_lan"] !== undefined) setAllowLAN(Boolean(settings["general.allow_lan"]));
     if (settings["general.log_level"] !== undefined) setLogLevel(String(settings["general.log_level"]));
     if (settings["general.ipv6"] !== undefined) setIpv6(Boolean(settings["general.ipv6"]));
+    if (settings["fluxo.apply_mode"] !== undefined) setApplyMode(String(settings["fluxo.apply_mode"]));
     if (settings["tun.enable"] !== undefined) setTunEnable(Boolean(settings["tun.enable"]));
     if (settings["tun.stack"] !== undefined) setTunStack(String(settings["tun.stack"]));
     if (settings["tun.auto_route"] !== undefined) setTunAutoRoute(Boolean(settings["tun.auto_route"]));
@@ -125,6 +129,7 @@ export default function SettingsPage() {
       "general.allow_lan": allowLAN,
       "general.log_level": logLevel,
       "general.ipv6": ipv6,
+      "fluxo.apply_mode": applyMode,
       "tun.enable": tunEnable,
       "tun.stack": tunStack,
       "tun.auto_route": tunAutoRoute,
@@ -137,6 +142,21 @@ export default function SettingsPage() {
 
   const handleApplyConfig = async () => {
     try {
+      if (applyMode !== "managed") {
+        const res = await fetch(`/api/config/generated`);
+        if (!res.ok) throw new Error("Failed to export");
+        const blob = new Blob([await res.text()], { type: "application/x-yaml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "mihomo-config.yaml";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success("配置已导出，请手动导入 Mihomo 并重启/重载");
+        return;
+      }
       const res = await fetch(`/api/config/apply`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to apply");
       toast.success(sT.configApplied);
@@ -188,6 +208,20 @@ export default function SettingsPage() {
 
           {/* General Tab */}
           <TabsContent value="general" className="mt-5 space-y-4">
+            <SectionCard title={sT.sectionFluxo}>
+              <SettingRow label={sT.applyMode} description={sT.applyModeDesc}>
+                <Select value={applyMode} onValueChange={setApplyMode}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">{sT.applyModeManual}</SelectItem>
+                    <SelectItem value="managed">{sT.applyModeManaged}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+            </SectionCard>
+
             <SectionCard title={sT.sectionNetwork}>
               <SettingRow label={sT.mixedPort} description={sT.mixedPortDesc}>
                 <Input

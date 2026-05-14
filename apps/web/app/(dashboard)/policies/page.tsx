@@ -554,6 +554,7 @@ export default function PoliciesPage() {
 
   async function switchMode(mode: string) {
     setOutboundMode(mode);
+    if (configModeQuery.data?.mode !== "managed") return;
     try {
       await fetch("/api/mihomo/mode", {
         method: "PUT",
@@ -645,6 +646,17 @@ export default function PoliciesPage() {
   const deleteGroup = useDeleteGroup();
   const applyConfig = useApplyConfig();
   const runtimeProxiesQuery = useMihomoProxies();
+  const configModeQuery = useQuery({
+    queryKey: ["config-mode"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/mode");
+      if (!res.ok) return { mode: "manual" as const };
+      return res.json() as Promise<{ mode: "manual" | "managed" }>;
+    },
+    staleTime: 30_000,
+  });
+  const managedMode = configModeQuery.data?.mode === "managed";
+  const applyConfigLabel = managedMode ? t.topbar.applyConfig : t.topbar.exportConfig;
 
   const proxyNodes = proxiesQuery.data ?? [];
   const proxyGroups = groupsQuery.data ?? [];
@@ -666,7 +678,7 @@ export default function PoliciesPage() {
   return (
     <div className="flex flex-col h-full">
       <Topbar title={t.policies.title} description={`${proxyNodes.length} nodes · ${proxyGroups.length} groups`}>
-        <ModeSegment
+        {managedMode && <ModeSegment
           value={outboundMode}
           onChange={switchMode}
           options={[
@@ -674,7 +686,7 @@ export default function PoliciesPage() {
             { label: t.topbar.global, value: "global" },
             { label: t.topbar.rules, value: "rule" },
           ]}
-        />
+        />}
         <Button
           size="sm"
           variant="secondary"
@@ -685,7 +697,7 @@ export default function PoliciesPage() {
           {applyConfig.isPending
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
             : <Check className="h-3.5 w-3.5" />}
-          {t.topbar.applyConfig}
+          {applyConfigLabel}
         </Button>
         <Button size="sm" onClick={() => setShowNewGroup(true)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
@@ -721,7 +733,7 @@ export default function PoliciesPage() {
               {applyConfig.isPending
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Check className="h-3.5 w-3.5" />}
-              {t.topbar.applyConfig}
+              {applyConfigLabel}
             </Button>
           </div>
         )}

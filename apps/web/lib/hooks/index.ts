@@ -3,6 +3,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { proxiesApi, groupsApi, rulesApi, settingsApi, profilesApi, mihomoApi } from '../api';
 import { toast } from 'sonner';
 
+function downloadYaml(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'application/x-yaml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 // --- Proxies ---
 export function useProxies() {
   return useQuery({ queryKey: ['proxies'], queryFn: proxiesApi.list, staleTime: 30_000 });
@@ -147,11 +159,20 @@ export function useUpdateSettings() {
 export function useApplyConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: settingsApi.applyConfig,
-    onSuccess: () => {
+    mutationFn: async () => {
+      const mode = await settingsApi.getConfigMode();
+      if (mode.mode === 'manual') {
+        const yaml = await settingsApi.downloadConfig();
+        downloadYaml('mihomo-config.yaml', yaml);
+        return { mode: 'manual' as const };
+      }
+      await settingsApi.applyConfig();
+      return { mode: 'managed' as const };
+    },
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['mihomo', 'proxies'] });
       qc.invalidateQueries({ queryKey: ['mihomo', 'status'] });
-      toast.success('Config applied to Mihomo');
+      toast.success(result.mode === 'manual' ? 'Config exported. Import it into Mihomo and restart/reload.' : 'Config applied to Mihomo');
     },
     onError: (e: Error) => toast.error(`Apply failed: ${e.message}`),
   });

@@ -6,6 +6,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   'general.mode',
   'general.log_level',
   'general.ipv6',
+  'fluxo.apply_mode',
   'tun.enable',
   'tun.stack',
   'tun.auto_route',

@@ -110,7 +110,12 @@ async function main() {
 
   getDb();
 
-  let configPath = process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
+  const dataDir = path.dirname(process.env.DB_PATH || path.join(process.cwd(), 'data', 'fluxo.db'));
+  const defaultApplyMode = process.env.FLUXO_DEFAULT_APPLY_MODE || process.env.FLUXO_APPLY_MODE;
+  const defaultConfigPath = defaultApplyMode === 'managed'
+    ? '/etc/mihomo/config.yaml'
+    : path.join(dataDir, 'generated.yaml');
+  let configPath = process.env.CONFIG_PATH || defaultConfigPath;
   let configDir = path.dirname(configPath);
   try {
     if (!fs.existsSync(configPath)) {

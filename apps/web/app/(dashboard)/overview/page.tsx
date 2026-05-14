@@ -58,6 +58,7 @@ export default function OverviewPage() {
     },
     refetchInterval: 30_000,
   });
+  const applyMode = settings?.['fluxo.apply_mode'] === 'managed' ? 'managed' : 'manual';
 
   // Load Mihomo status
   const { data: mihomoStatus } = useQuery<{ running: boolean; version: string | null }>({
@@ -110,22 +111,26 @@ export default function OverviewPage() {
   // TUN toggle mutation
   const tunMutation = useMutation({
     mutationFn: async (enable: boolean) => {
-      const res = await fetch(`/api/mihomo/tun`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      // Also persist to settings
-      await fetch(`/api/settings`, {
+      if (applyMode === 'managed') {
+        const res = await fetch(`/api/mihomo/tun`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enable }),
+        });
+        if (!res.ok) throw new Error('Failed');
+        return res.json();
+      }
+
+      const res = await fetch(`/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 'tun.enable': enable }),
       });
-      return res.json();
+      if (!res.ok) throw new Error('Failed');
+      return { ok: true, applied: false };
     },
     onSuccess: () => {
-      toast.success(t.settings.configApplied);
+      toast.success(applyMode === 'managed' ? t.settings.configApplied : t.settings.settingsSaved);
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
     onError: () => toast.error(t.settings.configFailed),
@@ -134,11 +139,25 @@ export default function OverviewPage() {
   // Apply config mutation
   const applyConfig = useMutation({
     mutationFn: async () => {
+      if (applyMode === 'manual') {
+        const res = await fetch(`/api/config/generated`);
+        if (!res.ok) throw new Error('Export failed');
+        const blob = new Blob([await res.text()], { type: 'application/x-yaml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'mihomo-config.yaml';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return { mode: 'manual' };
+      }
       const res = await fetch(`/api/config/apply`, { method: 'POST' });
       if (!res.ok) throw new Error('Apply failed');
       return res.json();
     },
-    onSuccess: () => toast.success(t.settings.configApplied),
+    onSuccess: () => toast.success(applyMode === 'manual' ? '配置已导出，请手动导入 Mihomo 并重启/重载' : t.settings.configApplied),
     onError: () => toast.error(t.settings.configFailed),
   });
 
@@ -218,7 +237,7 @@ export default function OverviewPage() {
           disabled={applyConfig.isPending}
         >
           <RefreshCw className={cn('h-3.5 w-3.5', applyConfig.isPending && 'animate-spin')} />
-          {applyConfig.isPending ? t.common.loading : t.overview.reloadConfig}
+          {applyConfig.isPending ? t.common.loading : applyMode === 'manual' ? t.topbar.exportConfig : t.overview.reloadConfig}
         </Button>
       </Topbar>
 
