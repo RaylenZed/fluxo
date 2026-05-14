@@ -141,7 +141,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
         const result = await providersApi.preview({ url: provider.url, limit: PROVIDER_NODE_PREVIEW_LIMIT });
         return {
           providerName,
-          names: applyGroupFilter(result.names, group.filter),
+          names: uniqueStrings(applyGroupFilter(result.names, group.filter)),
           count: result.count,
           skipped: result.skipped,
         };
@@ -373,7 +373,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                       )}
                       {visibleExternalPreview.names.length > 0 && (
                         <div className="mt-2 max-h-28 overflow-y-auto rounded-[8px] bg-[var(--surface)] border border-[var(--border)]">
-                          {visibleExternalPreview.names.slice(0, 12).map((proxyName) => (
+                          {uniqueStrings(visibleExternalPreview.names).slice(0, 12).map((proxyName) => (
                             <div key={proxyName} className="truncate px-2 py-1 text-xs text-[var(--foreground)]">
                               {proxyName}
                             </div>
@@ -458,8 +458,9 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                 .map(([providerName]) => providerName);
               const selectedProviderNodeNames = Object.values(selectedProviderNodes).flat();
               const providerNames = uniqueStrings([...externalProviderNamesForSave, ...selectedProviderNames]);
-              const nextFilter = selectedProviderNodeNames.length > 0
-                ? buildExactNameFilter(selectedProviderNodeNames)
+              const uniqueSelectedProviderNodeNames = uniqueStrings(selectedProviderNodeNames);
+              const nextFilter = uniqueSelectedProviderNodeNames.length > 0
+                ? buildExactNameFilter(uniqueSelectedProviderNodeNames)
                 : filterRegex;
               setExternalProviderNames(providerNames);
               onSave?.({

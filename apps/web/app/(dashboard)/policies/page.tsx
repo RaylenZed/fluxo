@@ -97,7 +97,7 @@ function applyGroupFilter(names: string[], filter?: string | null) {
 }
 
 function getOrderedGroupProxyNames(group: GroupRow, proxyNodes: ProxyRow[]): string[] {
-  const orderedNames = [...parseGroupProxyNames(group)];
+  const orderedNames = uniqueStrings(parseGroupProxyNames(group));
 
   if (group.use_all_proxies) {
     for (const node of proxyNodes) {
@@ -110,7 +110,7 @@ function getOrderedGroupProxyNames(group: GroupRow, proxyNodes: ProxyRow[]): str
 
 function getRuntimeGroupChoices(runtimeGroup: MihomoProxyState | null | undefined): string[] {
   if (!Array.isArray(runtimeGroup?.all)) return [];
-  return runtimeGroup.all.filter((value): value is string => typeof value === "string");
+  return uniqueStrings(runtimeGroup.all.filter((value): value is string => typeof value === "string"));
 }
 
 function groupChoicesMatch(group: GroupRow, proxyNodes: ProxyRow[], runtimeGroup: MihomoProxyState | null | undefined) {
