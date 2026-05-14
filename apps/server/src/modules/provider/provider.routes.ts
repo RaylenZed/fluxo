@@ -24,7 +24,7 @@ export const providerRoutes: FastifyPluginAsync = async (fastify) => {
         maxContentLength: 8 * 1024 * 1024,
         transformResponse: (data) => data,
         headers: {
-          'User-Agent': 'Fluxo/0.1.3',
+          'User-Agent': 'Fluxo/3.0.3',
           Accept: 'text/plain, application/x-yaml, application/yaml, */*',
         },
       });
