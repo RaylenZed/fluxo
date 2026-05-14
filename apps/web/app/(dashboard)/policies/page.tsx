@@ -134,6 +134,7 @@ function GroupCard({
   group,
   proxyNodes,
   providers,
+  latencyOverrides,
   runtimeProxyMap,
   runtimeReady,
   onEdit,
@@ -143,6 +144,7 @@ function GroupCard({
   group: GroupRow;
   proxyNodes: ProxyRow[];
   providers: ProviderRow[];
+  latencyOverrides: Record<string, number>;
   runtimeProxyMap: Record<string, MihomoProxyState> | null;
   runtimeReady: boolean;
   onEdit: () => void;
@@ -208,7 +210,7 @@ function GroupCard({
         return {
           name: node.name,
           type: node.type,
-          latency: readProxyLatency(node.config),
+          latency: latencyOverrides[node.name] ?? readProxyLatency(node.config),
           loadedInRuntime,
         };
       })
@@ -227,7 +229,7 @@ function GroupCard({
           .map((name) => ({
             name,
             type: "provider",
-            latency: 0,
+            latency: latencyOverrides[name] ?? 0,
             loadedInRuntime: false,
             pendingReason: "apply" as const,
           }));
@@ -258,7 +260,7 @@ function GroupCard({
       .map((name) => ({
         name,
         type: runtimeProxyMap?.[name]?.type ?? "provider",
-        latency: 0,
+        latency: latencyOverrides[name] ?? 0,
         loadedInRuntime: true,
       }));
 
@@ -291,7 +293,9 @@ function GroupCard({
 
   const selectedNode = proxyNodes.find((n) => n.name === selectedProxy);
   const selectedDisplayedNode = displayedNodes.find((node) => node.name === selectedProxy);
-  const selectedLatency = selectedNode ? readProxyLatency(selectedNode.config) : (selectedDisplayedNode?.latency ?? 0);
+  const selectedLatency = selectedNode
+    ? (latencyOverrides[selectedNode.name] ?? readProxyLatency(selectedNode.config))
+    : (selectedDisplayedNode?.latency ?? 0);
 
   function canUseRuntimeNode(name: string) {
     if (!runtimeReady) return false;
@@ -501,6 +505,7 @@ export default function PoliciesPage() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showAddNode, setShowAddNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [latencyOverrides, setLatencyOverrides] = useState<Record<string, number>>({});
   const { t } = useLocale();
   const queryClient = useQueryClient();
 
@@ -514,6 +519,7 @@ export default function PoliciesPage() {
     };
 
     await proxiesApi.update(nodeId, { config: nextConfig });
+    setLatencyOverrides((current) => ({ ...current, [targetNode.name]: latency }));
 
     queryClient.setQueryData<ProxyRow[]>(["proxies"], (current) =>
       current?.map((node) =>
@@ -525,6 +531,13 @@ export default function PoliciesPage() {
   }
 
   async function persistNamedLatencies(delays: Record<string, number>) {
+    const validDelays = Object.fromEntries(
+      Object.entries(delays).filter(([, latency]) => typeof latency === "number" && latency > 0)
+    ) as Record<string, number>;
+    if (Object.keys(validDelays).length > 0) {
+      setLatencyOverrides((current) => ({ ...current, ...validDelays }));
+    }
+
     const updates = Object.entries(delays)
       .filter(([, latency]) => typeof latency === "number" && latency > 0)
       .map(([proxyName, latency]) => {
@@ -591,6 +604,7 @@ export default function PoliciesPage() {
         }
 
         if (nodeId && typeof data.delay === "number" && data.delay > 0) {
+          setLatencyOverrides((current) => ({ ...current, [name]: data.delay as number }));
           try {
             await persistNodeLatency(nodeId, data.delay);
           } catch {
@@ -816,6 +830,7 @@ export default function PoliciesPage() {
                   group={group}
                   proxyNodes={proxyNodes}
                   providers={providers}
+                  latencyOverrides={latencyOverrides}
                   runtimeProxyMap={runtimeProxyMap}
                   runtimeReady={runtimeReady}
                   onEdit={() => setEditingGroupId(group.id)}
