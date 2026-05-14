@@ -20,6 +20,29 @@ function parseStringList(raw: string | null | undefined): string[] {
   }
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return values.filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+}
+
+function collectProviderNamesFromGroup(
+  groupName: string,
+  groupByName: Map<string, { proxies: string | null; providers: string | null }>,
+  visited = new Set<string>()
+): string[] {
+  if (visited.has(groupName)) return [];
+  visited.add(groupName);
+
+  const group = groupByName.get(groupName);
+  if (!group) return [];
+
+  const ownProviders = parseStringList(group.providers);
+  const nestedProviders = parseStringList(group.proxies).flatMap((memberName) =>
+    collectProviderNamesFromGroup(memberName, groupByName, visited)
+  );
+
+  return uniqueStrings([...ownProviders, ...nestedProviders]);
+}
+
 function parseInlineList(raw: string | null | undefined, fallback?: string): string[] {
   const source = raw?.trim() || fallback;
   if (!source) return [];
@@ -337,10 +360,27 @@ export async function generateConfig(): Promise<string> {
 
   // Load proxy groups
   const groupRows = db.prepare('SELECT * FROM proxy_groups ORDER BY sort_order').all() as any[];
+  const groupByName = new Map<string, { proxies: string | null; providers: string | null }>(
+    groupRows.map((row) => [row.name as string, { proxies: row.proxies, providers: row.providers }])
+  );
   const proxyGroups = groupRows.flatMap(row => {
     const isDefaultGroup = row.id === 'default-proxy-group' || row.name === 'Proxy';
-    const explicitProxies = parseStringList(row.proxies);
-    const providers = parseStringList(row.providers);
+    let explicitProxies = parseStringList(row.proxies);
+    let providers = parseStringList(row.providers);
+
+    if (row.filter) {
+      const providerGroupNames = explicitProxies.filter((memberName) =>
+        collectProviderNamesFromGroup(memberName, groupByName).length > 0
+      );
+      if (providerGroupNames.length > 0) {
+        providers = uniqueStrings([
+          ...providers,
+          ...providerGroupNames.flatMap((memberName) => collectProviderNamesFromGroup(memberName, groupByName)),
+        ]);
+        explicitProxies = explicitProxies.filter((memberName) => !providerGroupNames.includes(memberName));
+      }
+    }
+
     const includeAll = Boolean(row.use_all_proxies) || (isDefaultGroup && explicitProxies.length === 0 && providers.length === 0);
     const fallbackProxies = isDefaultGroup ? ['DIRECT'] : [];
     const proxiesForGroup = explicitProxies.length > 0 ? explicitProxies : fallbackProxies;
