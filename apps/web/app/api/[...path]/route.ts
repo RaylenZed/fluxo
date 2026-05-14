@@ -17,7 +17,16 @@ async function proxy(req: NextRequest, params: Promise<{ path: string[] }>) {
   const authorization = req.headers.get('authorization');
   if (authorization) headers['authorization'] = authorization;
 
-  const res = await fetch(url, { method: req.method, headers, body });
+  let res: Response;
+  try {
+    res = await fetch(url, { method: req.method, headers, body });
+  } catch {
+    return NextResponse.json(
+      { error: 'Fluxo API is unavailable' },
+      { status: 503 }
+    );
+  }
+
   const text = await res.text();
 
   // Forward Set-Cookie back to the browser

@@ -591,6 +591,7 @@ Environment=MIHOMO_SECRET=${MIHOMO_SECRET_VALUE}
 ExecStart=${node_bin} ${INSTALL_DIR}/apps/server/dist/index.js
 Restart=on-failure
 RestartSec=5s
+SuccessExitStatus=143
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=fluxo
@@ -620,6 +621,7 @@ Environment=BACKEND_URL=http://127.0.0.1:${SERVER_PORT}
 ExecStart=${node_bin} ${web_standalone}/server.js
 Restart=on-failure
 RestartSec=5s
+SuccessExitStatus=143
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=fluxo-web
