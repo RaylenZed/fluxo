@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, MoreHorizontal, Zap, ChevronDown, Clock, RotateCcw, Network, ServerCrash, Check, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Topbar, ModeSegment } from "@/components/layout/topbar";
 import { cn, getLatencyBg } from "@/lib/utils";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProxyGroupDialog } from "@/components/policy/proxy-group-dialog";
 import { ProxyNodeDialog } from "@/components/proxy/proxy-node-dialog";
@@ -105,57 +105,6 @@ function groupChoicesMatch(group: GroupRow, proxyNodes: ProxyRow[], runtimeGroup
     && runtimeChoices.every((proxyName) => expectedChoiceSet.has(proxyName));
 }
 
-// ─── NodeCard ─────────────────────────────────────────────────────────────────
-function NodeCard({
-  node,
-  selected,
-  disabled,
-  pendingLabel,
-  onClick,
-}: {
-  node: { name: string; type: string; latency: number; loadedInRuntime: boolean };
-  selected: boolean;
-  disabled: boolean;
-  pendingLabel: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "w-full rounded-[12px] border p-3 text-left transition-all duration-150",
-        selected
-          ? "border-[var(--brand-500)] bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/10"
-          : disabled
-            ? "cursor-not-allowed border-amber-200 bg-amber-50/70 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-          : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--brand-300)] hover:bg-[var(--surface)]"
-      )}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-          {node.type}
-        </span>
-        {selected && <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-500)]" />}
-      </div>
-      <p className="text-sm font-semibold text-[var(--foreground)] truncate">{node.name}</p>
-      {!node.loadedInRuntime ? (
-        <span className="mt-2 inline-block rounded-[5px] bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-          {pendingLabel}
-        </span>
-      ) : node.latency > 0 ? (
-        <span className={cn("mt-2 inline-block text-[11px] font-semibold rounded-[5px] px-1.5 py-0.5", getLatencyBg(node.latency))}>
-          {node.latency}ms
-        </span>
-      ) : (
-        <span className="mt-2 inline-block text-[11px] font-semibold rounded-[5px] px-1.5 py-0.5 text-[var(--muted)]">
-          —
-        </span>
-      )}
-    </button>
-  );
-}
-
 // ─── GroupCard ────────────────────────────────────────────────────────────────
 function GroupCard({
   group,
@@ -174,7 +123,6 @@ function GroupCard({
   onDelete: () => void;
   onLatencyTest: () => void;
 }) {
-  const [showNodes, setShowNodes] = useState(false);
   const { t } = useLocale();
 
   const groupTypeLabels = {
@@ -307,16 +255,27 @@ function GroupCard({
     }
   }
 
+  const selectedMenuNode = displayedNodes.find((node) => node.name === selectedProxy);
+
   return (
-    <Card className="p-3 hover:shadow-lg transition-all duration-200 group">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <TypeIcon className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <span className="text-[10px] text-[var(--muted)] font-medium">{typeLabel}</span>
+    <Card
+      className={cn(
+        "group flex h-[128px] flex-col rounded-[10px] p-3 shadow-[0_1px_2px_rgba(15,17,23,0.04)] transition-all duration-150",
+        "hover:-translate-y-0.5 hover:border-[var(--brand-200)] hover:shadow-[0_10px_24px_rgba(15,17,23,0.08)]",
+        selectedProxy !== "DIRECT" && "bg-gradient-to-br from-white to-[var(--surface-2)] dark:from-[var(--surface)] dark:to-[var(--surface-2)]",
+        hasPendingRuntimeChanges && "border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10"
+      )}
+    >
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted-foreground)]">
+            <TypeIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{typeLabel}</span>
+          </div>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-6 w-6 text-[var(--muted)]">
+            <Button variant="ghost" size="icon-sm" className="h-6 w-6 shrink-0 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100">
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -329,45 +288,78 @@ function GroupCard({
         </DropdownMenu>
       </div>
 
-      <p className="text-sm font-bold text-[var(--foreground)] mb-2 truncate">{group.name}</p>
+      <p className="truncate text-[15px] font-bold text-[var(--foreground)]">{group.name}</p>
       {hasPendingRuntimeChanges && (
-        <p className="mb-2 text-[11px] font-medium text-amber-600 dark:text-amber-300">{t.policies.pendingApply}</p>
+        <p className="mt-1 truncate text-[11px] font-medium text-amber-600 dark:text-amber-300">{t.policies.pendingApply}</p>
       )}
 
-      <button
-        onClick={() => setShowNodes(!showNodes)}
-        className={cn(
-          "flex items-center gap-1.5 text-xs font-semibold rounded-[8px] px-2 py-1 transition-all duration-150 w-full",
-          hasPendingRuntimeChanges
-            ? "border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-            : selectedProxy === "DIRECT"
-            ? "bg-[var(--surface-2)] text-[var(--muted)] border border-[var(--border)]"
-            : "bg-[var(--brand-50)] text-[var(--brand-600)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]"
-        )}
-      >
-        <span className="flex-1 text-left truncate">{selectedProxy}</span>
-        {selectedLatency > 0 && (
-          <span className={cn("text-[10px]", getLatencyBg(selectedLatency), "rounded px-1 py-0.5")}>
-            {selectedLatency}ms
-          </span>
-        )}
-        <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", showNodes && "rotate-180")} />
-      </button>
-
-      {showNodes && (
-        <div className="mt-2 grid grid-cols-1 gap-1.5">
-          {displayedNodes.map((node) => (
-            <NodeCard
-              key={node.name}
-              node={node}
-              selected={selectedProxy === node.name}
-              disabled={!runtimeReady || !node.loadedInRuntime}
-              pendingLabel={t.policies.pendingApply}
-              onClick={() => void switchProxy(node.name)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="mt-auto">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "flex h-8 w-full items-center gap-2 rounded-[8px] border px-2 text-xs font-semibold transition-colors",
+                hasPendingRuntimeChanges
+                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                  : selectedProxy === "DIRECT"
+                    ? "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface)]"
+                    : "border-transparent bg-[var(--brand-50)] text-[var(--brand-600)] hover:bg-[var(--brand-100)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]"
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate text-left">{selectedProxy}</span>
+              {selectedLatency > 0 && (
+                <span className={cn("rounded px-1 py-0.5 text-[10px]", getLatencyBg(selectedLatency))}>
+                  {selectedLatency}ms
+                </span>
+              )}
+              {!selectedMenuNode?.loadedInRuntime && hasPendingRuntimeChanges && (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              )}
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-72 p-1">
+            <DropdownMenuLabel className="flex items-center justify-between gap-3">
+              <span className="truncate">{group.name}</span>
+              {displayedNodes.length > 0 && (
+                <span className="text-[10px] font-medium text-[var(--muted-foreground)]">{displayedNodes.length}</span>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div className="max-h-[320px] overflow-y-auto">
+              {displayedNodes.map((node) => {
+                const disabled = !runtimeReady || !node.loadedInRuntime;
+                const selected = selectedProxy === node.name;
+                return (
+                  <DropdownMenuItem
+                    key={node.name}
+                    disabled={disabled}
+                    onSelect={() => void switchProxy(node.name)}
+                    className="min-h-9 gap-2"
+                  >
+                    <Check className={cn("h-3.5 w-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{node.name}</div>
+                      <div className="text-[10px] font-medium uppercase text-[var(--muted-foreground)]">{node.type}</div>
+                    </div>
+                    {!node.loadedInRuntime ? (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                        {t.policies.pendingApply}
+                      </span>
+                    ) : node.latency > 0 ? (
+                      <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", getLatencyBg(node.latency))}>
+                        {node.latency}ms
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-[var(--muted-foreground)]">—</span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </Card>
   );
 }
@@ -401,6 +393,28 @@ function ApiError() {
       <ServerCrash className="h-10 w-10 mb-3 opacity-40" />
       <p className="text-sm font-medium">{t.policies.cannotReachApi}</p>
       <p className="text-xs mt-1">{t.policies.makeBackendRunning}</p>
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  count,
+  accent = false,
+  action,
+}: {
+  title: string;
+  count: number;
+  accent?: boolean;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex items-baseline gap-2">
+        <h2 className={cn("text-sm font-bold", accent ? "text-[var(--brand-500)]" : "text-[var(--foreground)]")}>{title}</h2>
+        <span className="text-xs text-[var(--muted)]">{count}</span>
+      </div>
+      {action}
     </div>
   );
 }
@@ -584,9 +598,9 @@ export default function PoliciesPage() {
         </Button>
       </Topbar>
 
-      <div className="flex-1 p-6 overflow-auto space-y-6">
+      <div className="flex-1 overflow-auto px-6 py-5">
         {runtimeProxiesQuery.isError && (
-          <div className="flex items-start gap-3 rounded-[16px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="mb-4 flex items-start gap-3 rounded-[10px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <ServerCrash className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t.policies.runtimeStateUnavailable}</p>
@@ -596,7 +610,7 @@ export default function PoliciesPage() {
         )}
 
         {hasPendingRuntimeSync && (
-          <div className="flex items-start gap-3 rounded-[16px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="mb-5 flex items-start gap-3 rounded-[10px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <Clock className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t.policies.runtimeSyncNeeded}</p>
@@ -618,43 +632,42 @@ export default function PoliciesPage() {
         )}
 
         {/* Proxy Nodes */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--brand-500)] mb-3 flex items-center gap-2">
-            <span className="h-px flex-1 bg-[var(--border)]" />
-            {t.policies.proxyNodes} ({proxyNodes.length})
-            <span className="h-px flex-1 bg-[var(--border)]" />
-          </h2>
+        <section className="mb-8">
+          <SectionHeader
+            title={t.policies.proxyNodes}
+            count={proxyNodes.length}
+            accent
+            action={
+              proxyNodes.length > 0 ? (
+                <Button size="sm" variant="secondary" onClick={() => setShowAddNode(true)} className="h-7 gap-1.5 px-2 text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  {t.policies.addNode}
+                </Button>
+              ) : null
+            }
+          />
 
           {proxiesQuery.isLoading ? (
             <NodeSkeleton />
           ) : proxiesQuery.isError ? (
             <ApiError />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {proxyNodes.map((node) => {
                 const latency = readProxyLatency(node.config);
                 const loadedInRuntime = runtimeLoadedNames ? runtimeLoadedNames.has(node.name) : true;
 
                 return (
-                  <Card key={node.id} className="p-3 hover:shadow-lg transition-all group cursor-pointer">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">{node.type}</div>
-                    <p className="text-sm font-bold text-[var(--foreground)] truncate">{node.name}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      {!loadedInRuntime ? (
-                        <span className="text-[11px] font-semibold rounded-[5px] px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                          {t.policies.pendingApply}
-                        </span>
-                      ) : latency > 0 ? (
-                        <span className={cn("text-[11px] font-semibold rounded-[5px] px-1.5 py-0.5", getLatencyBg(latency))}>
-                          {latency}ms
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-semibold rounded-[5px] px-1.5 py-0.5 text-[var(--muted)]">—</span>
-                      )}
+                  <Card key={node.id} className="group flex h-[96px] flex-col rounded-[10px] p-3 shadow-[0_1px_2px_rgba(15,17,23,0.04)] transition-all duration-150 hover:-translate-y-0.5 hover:border-[var(--brand-200)] hover:shadow-[0_10px_24px_rgba(15,17,23,0.08)]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase text-[var(--muted-foreground)]">{node.type}</div>
+                        <p className="mt-1 truncate text-[15px] font-bold text-[var(--foreground)]">{node.name}</p>
+                      </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 h-5 w-5">
-                            <MoreHorizontal className="h-3 w-3" />
+                          <Button variant="ghost" size="icon-sm" className="h-6 w-6 shrink-0 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100">
+                            <MoreHorizontal className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-36">
@@ -670,11 +683,24 @@ export default function PoliciesPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                    <div className="mt-auto">
+                      {!loadedInRuntime ? (
+                        <span className="rounded-[5px] bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                          {t.policies.pendingApply}
+                        </span>
+                      ) : latency > 0 ? (
+                        <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold", getLatencyBg(latency))}>
+                          {latency}ms
+                        </span>
+                      ) : (
+                        <span className="rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--muted)]">—</span>
+                      )}
+                    </div>
                   </Card>
                 );
               })}
               <button
-                className="flex flex-col items-center justify-center rounded-[16px] border-2 border-dashed border-[var(--border)] p-3 text-[var(--muted)] hover:border-[var(--brand-400)] hover:text-[var(--brand-500)] transition-all min-h-[80px]"
+                className="flex h-[96px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[var(--border)] p-3 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-[var(--surface)] hover:text-[var(--brand-500)]"
                 onClick={() => setShowAddNode(true)}
               >
                 <Plus className="h-5 w-5" />
@@ -686,18 +712,23 @@ export default function PoliciesPage() {
 
         {/* Policy Groups */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)] mb-3 flex items-center gap-2">
-            <span className="h-px flex-1 bg-[var(--border)]" />
-            {t.policies.policyGroups} ({proxyGroups.length})
-            <span className="h-px flex-1 bg-[var(--border)]" />
-          </h2>
+          <SectionHeader
+            title={t.policies.policyGroups}
+            count={proxyGroups.length}
+            action={
+              <Button size="sm" variant="secondary" onClick={() => setShowNewGroup(true)} className="h-7 gap-1.5 px-2 text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                {t.policies.addGroup}
+              </Button>
+            }
+          />
 
           {groupsQuery.isLoading ? (
             <GroupSkeleton />
           ) : groupsQuery.isError ? (
             <ApiError />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {proxyGroups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -711,7 +742,7 @@ export default function PoliciesPage() {
                 />
               ))}
               <button
-                className="flex flex-col items-center justify-center rounded-[16px] border-2 border-dashed border-[var(--border)] p-3 text-[var(--muted)] hover:border-[var(--brand-400)] hover:text-[var(--brand-500)] transition-all min-h-[100px]"
+                className="flex h-[128px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[var(--border)] p-3 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-[var(--surface)] hover:text-[var(--brand-500)]"
                 onClick={() => setShowNewGroup(true)}
               >
                 <Plus className="h-5 w-5" />
