@@ -19,6 +19,7 @@ Fluxo 是面向 Linux VPS 的现代化 Web 控制面板，将 Mihomo (Clash.Meta
 - **策略页** — 可视化管理代理节点与策略组
   - 支持 15 种协议：HTTP / HTTPS / SOCKS5 / SOCKS5-TLS / SSH / SS / VMess / VLESS / Trojan / Snell / TUIC / TUICv5 / Hysteria2 / WireGuard / AnyTLS
   - **URL 自动解析**：粘贴 `vmess://` `vless://` `ss://` `trojan://` `hysteria2://` `tuic://` 链接自动填充表单
+  - **订阅拆分导入**：从 Clash/Mihomo YAML 或 base64 订阅 URL 导入节点，并拆成可单独编辑、测速和分配到策略组的代理节点
   - 节点编辑 / 删除
   - 策略组：手动选择 / 自动测速 / 故障转移 / 负载均衡
   - **应用配置**：将 DB 中所有节点、策略组、规则生成 YAML 并热重载 Mihomo
@@ -200,6 +201,18 @@ Docker 挂载说明：
 2. 生成 YAML（`js-yaml`）
 3. 写入 `CONFIG_PATH`（默认 `/etc/mihomo/config.yaml`）
 4. 通过 Mihomo REST API `PUT /configs` 热重载
+
+---
+
+## Subscription Import
+
+在「配置」页使用「导入 URL」可以拉取订阅并拆分成具体代理节点。当前支持：
+
+- Clash/Mihomo YAML 中的 `proxies` 列表
+- base64 编码的订阅链接列表
+- 常见单节点链接：`vmess://`、`vless://`、`ss://`、`trojan://`、`hysteria2://` / `hy2://`、`tuic://`
+
+导入后的节点会进入「策略」页的代理节点列表。默认 `Proxy` 策略组启用了 `include-all`，所以应用配置后新节点会自动出现在运行中的策略组里；也可以手动创建策略组，只选择某几个节点使用。
 
 ---
 

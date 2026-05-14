@@ -1,12 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Folder, Plus, Link, CheckCircle2, MoreHorizontal, Trash2, Copy, Pen, Download, Play, Loader2 } from "lucide-react";
+import { Folder, Plus, Link, CheckCircle2, MoreHorizontal, Trash2, Copy, Pen, Download, Play, Loader2, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
+import { profilesApi } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,6 @@ export default function ProfilesPage() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [importUrl, setImportUrl] = useState("");
-  const [importInterval, setImportInterval] = useState("24h");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
@@ -118,6 +117,27 @@ export default function ProfilesPage() {
     onError: () => toast.error(pT.profileCreateFailed),
   });
 
+  const importMutation = useMutation({
+    mutationFn: async (data: { url: string; name?: string }) =>
+      profilesApi.importUrl(data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["profiles"] });
+      qc.invalidateQueries({ queryKey: ["proxies"] });
+      qc.invalidateQueries({ queryKey: ["groups"] });
+      const message = (pT.importedNodes ?? "Imported {count} nodes")
+        .replace("{count}", String(result.imported))
+        .replace("{created}", String(result.created))
+        .replace("{updated}", String(result.updated));
+      toast.success(message);
+      if (result.skipped > 0) {
+        toast.warning((pT.importSkipped ?? "Skipped {count} unsupported nodes").replace("{count}", String(result.skipped)));
+      }
+      setImportUrl("");
+      setShowImportDialog(false);
+    },
+    onError: (error: Error) => toast.error(error.message || pT.importFailed || pT.profileCreateFailed),
+  });
+
   const handleActivate = (id: string) => {
     setPendingActivateId(id);
     setShowConfirmDialog(true);
@@ -135,6 +155,7 @@ export default function ProfilesPage() {
   };
 
   const pendingProfile = profiles.find((p) => p.id === pendingActivateId);
+  const isSubscriptionProfile = (profile: Profile) => /^https?:\/\//i.test(profile.description);
 
   return (
     <div className="flex flex-col h-full">
@@ -225,6 +246,15 @@ export default function ProfilesPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem className="gap-2" disabled><Download className="h-3.5 w-3.5" />{pT.export}</DropdownMenuItem>
+                          {isSubscriptionProfile(profile) && (
+                            <DropdownMenuItem
+                              className="gap-2"
+                              onClick={() => importMutation.mutate({ url: profile.description, name: profile.name })}
+                              disabled={importMutation.isPending}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />{pT.refreshSubscription}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             className="gap-2"
                             onClick={() => duplicateMutation.mutate({ name: `${profile.name} (copy)`, description: profile.description })}
@@ -285,31 +315,18 @@ export default function ProfilesPage() {
               <label className="text-sm font-medium text-[var(--foreground)]">{pT.subscriptionUrlLabel}</label>
               <Input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder={pT.subscriptionUrlPlaceholder} />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--foreground)]">{pT.autoUpdateInterval}</label>
-              <Select value={importInterval} onValueChange={setImportInterval}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="disabled">{pT.intervalDisabled}</SelectItem>
-                  <SelectItem value="1h">{pT.interval1h}</SelectItem>
-                  <SelectItem value="6h">{pT.interval6h}</SelectItem>
-                  <SelectItem value="24h">{pT.interval24h}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowImportDialog(false)}>{t.common.cancel}</Button>
             <Button
               onClick={() => {
                 if (!importUrl.trim()) return;
-                createMutation.mutate({ name: importUrl.split("/").pop() ?? "Imported", description: importUrl });
-                setImportUrl("");
-                setShowImportDialog(false);
+                importMutation.mutate({ url: importUrl.trim() });
               }}
+              disabled={!importUrl.trim() || importMutation.isPending}
               className="bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white"
             >
-              {pT.import}
+              {importMutation.isPending ? (pT.importing ?? pT.import) : pT.import}
             </Button>
           </DialogFooter>
         </DialogContent>

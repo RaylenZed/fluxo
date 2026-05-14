@@ -62,6 +62,15 @@ export interface ProfileRow {
   updated_at: string;
 }
 
+export interface ImportSubscriptionResult {
+  profileId: string;
+  profileName: string;
+  imported: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
 export interface MihomoProxyState {
   name: string;
   type: string;
@@ -123,6 +132,8 @@ export const profilesApi = {
   list: () => request<ProfileRow[]>('/api/profiles'),
   create: (data: { name: string; description?: string }) =>
     request<{ id: string }>('/api/profiles', { method: 'POST', body: JSON.stringify(data) }),
+  importUrl: (data: { url: string; name?: string }) =>
+    request<ImportSubscriptionResult>('/api/profiles/import-url', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<ProfileRow>) =>
     request<{ ok: boolean }>(`/api/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>

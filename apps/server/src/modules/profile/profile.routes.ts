@@ -7,6 +7,7 @@ import {
   deleteProfile,
   activateProfile,
 } from './profile.service';
+import { importSubscriptionFromUrl } from './subscription-import.service';
 import { getHttpStatus } from '../policy/policy.validation';
 
 export const profileRoutes: FastifyPluginAsync = async (fastify) => {
@@ -35,6 +36,17 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const body = req.body as { name: string; description?: string };
       const result = createProfile(body);
+      reply.code(201).send(result);
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
+    }
+  });
+
+  fastify.post('/profiles/import-url', async (req, reply) => {
+    try {
+      const body = req.body as { url: string; name?: string };
+      const result = await importSubscriptionFromUrl(body);
       reply.code(201).send(result);
     } catch (err) {
       fastify.log.error(err);
