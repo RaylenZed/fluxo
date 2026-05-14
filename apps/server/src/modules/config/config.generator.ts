@@ -596,7 +596,7 @@ async function reloadWithSecrets(
   for (const secret of secrets) {
     try {
       await axios.put(
-        `${mihomoApiUrl}/configs`,
+        `${mihomoApiUrl}/configs?force=true`,
         { path: configPath },
         { headers: getMihomoHeaders(secret), timeout: 5000 },
       );

@@ -21,7 +21,7 @@ export async function getMihomoStatus() {
 
 export async function reloadConfig(configPath: string) {
   const { apiUrl, secret } = getMihomoConfig();
-  await axios.put(`${apiUrl}/configs`, { path: configPath }, { headers: getMihomoHeaders(secret), timeout: TIMEOUT });
+  await axios.put(`${apiUrl}/configs?force=true`, { path: configPath }, { headers: getMihomoHeaders(secret), timeout: TIMEOUT });
 }
 
 export async function getMihomoConnections() {

@@ -100,6 +100,26 @@ export default function ConfigEditorPage() {
   }
 
   async function handleReload() {
+    if (source === "raw") {
+      if (hasUnsavedChanges && !window.confirm(eT.discardChangesConfirm)) return;
+      setReloading(true);
+      try {
+        const reloadRes = await fetch("/api/mihomo/reload", { method: "POST" });
+        if (!reloadRes.ok) throw new Error();
+        const configRes = await fetch("/api/config");
+        if (!configRes.ok) throw new Error();
+        const text = await configRes.text();
+        setYaml(text);
+        setLoadedYaml(text);
+        toast.success(eT.reloaded);
+      } catch {
+        toast.error(eT.reloadFailed);
+      } finally {
+        setReloading(false);
+      }
+      return;
+    }
+
     await loadConfig(source);
   }
 

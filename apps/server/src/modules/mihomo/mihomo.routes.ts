@@ -63,6 +63,38 @@ function parseMemoryPayload(rawLine: string): { inuse?: number; oslimit?: number
   }
 }
 
+function readMihomoUptimeSeconds(): number | null {
+  const activeUsecRaw = execSync(
+    "systemctl show mihomo --property=ActiveEnterTimestampMonotonic --value 2>/dev/null",
+    { timeout: 2000 },
+  ).toString().trim();
+  const activeUsec = Number(activeUsecRaw);
+
+  if (Number.isFinite(activeUsec) && activeUsec > 0) {
+    const bootUptimeRaw = execSync("awk '{print $1}' /proc/uptime", { timeout: 2000 }).toString().trim();
+    const bootUptimeSeconds = Number(bootUptimeRaw);
+    if (Number.isFinite(bootUptimeSeconds) && bootUptimeSeconds > 0) {
+      const uptime = Math.floor(bootUptimeSeconds - activeUsec / 1_000_000);
+      return uptime >= 0 ? uptime : null;
+    }
+  }
+
+  const timestamp = execSync(
+    "systemctl show mihomo --property=ActiveEnterTimestamp --value 2>/dev/null",
+    { timeout: 2000 },
+  ).toString().trim();
+  if (!timestamp || timestamp === 'n/a') return null;
+
+  // systemd appends localized timezone abbreviations such as CST, which JS may
+  // parse as a different region. Treat the timestamp as local wall time instead.
+  const localTimestamp = timestamp.replace(/\s+[A-Z]{2,5}$/, '');
+  const since = new Date(localTimestamp).getTime();
+  if (!Number.isFinite(since)) return null;
+
+  const uptime = Math.floor((Date.now() - since) / 1000);
+  return uptime >= 0 ? uptime : null;
+}
+
 export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/mihomo/status', async (_req, reply) => {
     try {
@@ -236,11 +268,7 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/mihomo/uptime — get mihomo service uptime via systemd
   fastify.get('/mihomo/uptime', async (_req, reply) => {
     try {
-      const out = execSync("systemctl show mihomo --property=ActiveEnterTimestamp --value 2>/dev/null", { timeout: 2000 }).toString().trim();
-      if (!out || out === 'n/a') return { uptime: null };
-      const since = new Date(out).getTime();
-      const seconds = Math.floor((Date.now() - since) / 1000);
-      return { uptime: seconds };
+      return { uptime: readMihomoUptimeSeconds() };
     } catch (err) {
       fastify.log.debug({ err }, 'Failed to read mihomo uptime via systemctl');
       return { uptime: null };
