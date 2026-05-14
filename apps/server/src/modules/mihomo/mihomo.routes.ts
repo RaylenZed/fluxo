@@ -95,6 +95,46 @@ function readMihomoUptimeSeconds(): number | null {
   return uptime >= 0 ? uptime : null;
 }
 
+function readSettingBoolean(key: string, fallback = false): boolean {
+  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  if (!row) return fallback;
+
+  try {
+    const parsed = JSON.parse(row.value);
+    return parsed === true || parsed === 'true';
+  } catch {
+    return fallback;
+  }
+}
+
+function readCommandOutput(command: string): string | null {
+  try {
+    return execSync(command, { timeout: 2000, encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function readTunRuntimeStatus() {
+  const desired = readSettingBoolean('tun.enable', false);
+  const metaLink = readCommandOutput('ip link show Meta 2>/dev/null');
+  const routeToInternet = readCommandOutput('ip route get 8.8.8.8 2>/dev/null');
+  const resolvConf = readCommandOutput("awk '/^nameserver /{print $2}' /etc/resolv.conf 2>/dev/null");
+  const active = Boolean(metaLink);
+  const routeUsesTun = routeToInternet ? /\bdev\s+Meta\b/.test(routeToInternet) : null;
+  const dnsNameservers = resolvConf ? resolvConf.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+
+  return {
+    desired,
+    active,
+    interface: active ? 'Meta' : null,
+    routeToInternet,
+    routeUsesTun,
+    dnsNameservers,
+    status: desired ? (active ? 'active' : 'mismatch') : 'disabled',
+  };
+}
+
 export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/mihomo/status', async (_req, reply) => {
     try {
@@ -111,6 +151,23 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: 'Failed to get version' });
+    }
+  });
+
+  fastify.get('/mihomo/tun/status', async (_req, reply) => {
+    try {
+      return readTunRuntimeStatus();
+    } catch (err) {
+      fastify.log.debug({ err }, 'Failed to read TUN runtime status');
+      return {
+        desired: readSettingBoolean('tun.enable', false),
+        active: false,
+        interface: null,
+        routeToInternet: null,
+        routeUsesTun: null,
+        dnsNameservers: [],
+        status: 'unknown',
+      };
     }
   });
 

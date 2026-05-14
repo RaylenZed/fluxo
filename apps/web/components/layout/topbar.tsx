@@ -14,18 +14,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+type TunStatus = {
+  desired: boolean;
+  active: boolean;
+  status: "active" | "mismatch" | "disabled" | "unknown";
+};
+
 function useTunState() {
   const qc = useQueryClient();
-  const { data: tunEnabled = false } = useQuery({
+  const { data: tunStatus } = useQuery<TunStatus>({
     queryKey: ["tun-state"],
     queryFn: async () => {
-      const r = await fetch(`/api/settings`);
-      if (!r.ok) return false;
-      const d = await r.json();
-      return d['tun.enable'] === true || d['tun.enable'] === 'true';
+      const r = await fetch(`/api/mihomo/tun/status`);
+      if (r.ok) return r.json();
+
+      const settingsRes = await fetch(`/api/settings`);
+      if (!settingsRes.ok) return { desired: false, active: false, status: "unknown" as const };
+      const settings = await settingsRes.json();
+      const desired = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
+      return { desired, active: false, status: "unknown" as const };
     },
     staleTime: 30_000,
   });
+  const tunEnabled = tunStatus?.desired ?? false;
   const toggle = useMutation({
     mutationFn: async (enable: boolean) => {
       const res = await fetch(`/api/mihomo/tun`, {
@@ -40,7 +51,7 @@ function useTunState() {
       qc.invalidateQueries({ queryKey: ["dashboard", "info"] });
     },
   });
-  return { tunEnabled, toggle: toggle.mutate };
+  return { tunEnabled, tunStatus, toggle: toggle.mutate };
 }
 
 interface TopbarProps {
@@ -110,7 +121,8 @@ function UserMenu() {
 export function Topbar({ title, description, children }: TopbarProps) {
   const { theme, setTheme } = useTheme();
   const { t } = useLocale();
-  const { tunEnabled, toggle } = useTunState();
+  const { tunEnabled, tunStatus, toggle } = useTunState();
+  const tunMismatch = tunStatus?.desired && !tunStatus.active;
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-3 bg-[var(--background)]/90 backdrop-blur-md px-5 border-b border-[var(--border)]">
@@ -142,7 +154,12 @@ export function Topbar({ title, description, children }: TopbarProps) {
         {/* TUN toggle */}
         <div className="hidden md:flex items-center gap-2 pr-2 border-r border-[var(--border)]">
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <span className="text-xs text-[var(--muted)] font-medium">{t.topbar.enhanced}</span>
+            <span
+              className={cn("text-xs font-medium", tunMismatch ? "text-amber-600 dark:text-amber-400" : "text-[var(--muted)]")}
+              title={tunMismatch ? "TUN is enabled in settings, but the Meta interface is not active." : undefined}
+            >
+              {t.topbar.enhanced}
+            </span>
             <Switch
               className="scale-90"
               checked={tunEnabled}

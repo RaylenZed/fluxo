@@ -26,17 +26,21 @@ function useDashboardInfo() {
   return useQuery({
     queryKey: ["dashboard", "info"],
     queryFn: async () => {
-      const [memRes, uptimeRes, settingsRes] = await Promise.all([
+      const [memRes, uptimeRes, tunRes, settingsRes] = await Promise.all([
         ft(`/api/mihomo/memory`, 4000),
         ft(`/api/mihomo/uptime`, 3000),
+        ft(`/api/mihomo/tun/status`, 3000),
         ft(`/api/settings`, 5000),
       ]);
       const settings = settingsRes ?? {};
-      const tunEnabled = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
+      const desiredTunEnabled = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
+      const tunEnabled = Boolean(tunRes?.active ?? desiredTunEnabled);
+      const tunMismatch = Boolean((tunRes?.desired ?? desiredTunEnabled) && tunRes && !tunRes.active);
       return {
         memory: (memRes?.inuse as number) ?? null,
         uptime: (uptimeRes?.uptime as number | null) ?? null,
         tunEnabled,
+        tunMismatch,
       };
     },
     refetchInterval: 15_000,
@@ -187,7 +191,7 @@ function StatisticsPanel({
   isRunning,
   version,
 }: {
-  dashInfo: { memory: number | null; uptime: number | null; tunEnabled: boolean } | undefined;
+  dashInfo: { memory: number | null; uptime: number | null; tunEnabled: boolean; tunMismatch: boolean } | undefined;
   isRunning: boolean;
   version: string | null;
 }) {
@@ -257,8 +261,8 @@ function StatisticsPanel({
             <div className="flex items-center gap-2">
               <Server className="h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0" />
               <span className="text-xs text-[var(--muted)] flex-1">{t.dashboard.enhancedMode}</span>
-              <Badge variant={dashInfo?.tunEnabled ? "success" : "secondary"} className="text-[10px]">
-                {dashInfo?.tunEnabled ? t.status.on : t.status.off}
+              <Badge variant={dashInfo?.tunMismatch ? "warning" : dashInfo?.tunEnabled ? "success" : "secondary"} className="text-[10px]">
+                {dashInfo?.tunMismatch ? "异常" : dashInfo?.tunEnabled ? t.status.on : t.status.off}
               </Badge>
             </div>
             <div className="flex items-center gap-2">

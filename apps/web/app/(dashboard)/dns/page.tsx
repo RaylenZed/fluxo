@@ -44,10 +44,15 @@ function useSaveDns() {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to save");
-      return res.json();
+      const saved = await res.json();
+      const applyRes = await fetch(`/api/config/apply`, { method: "POST" });
+      if (!applyRes.ok) throw new Error("Failed to apply");
+      return saved;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dns"] });
+      qc.invalidateQueries({ queryKey: ["tun-state"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "info"] });
       toast.success(t.dns.saved);
     },
     onError: () => toast.error(t.dns.saveFailed),
