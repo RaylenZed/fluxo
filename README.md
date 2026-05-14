@@ -84,15 +84,15 @@ curl -fsSL https://fluxo.click/cn | bash
 
 | 服务 | 说明 | 端口 |
 |------|------|------|
-| `mihomo` | Mihomo 代理核心 | 9090 (API) / 7890 (proxy) |
-| `fluxo` | Fastify API 服务 | 8090 |
+| `mihomo` | Mihomo 代理核心 | 127.0.0.1:9090 (API) / 7890 (proxy) |
+| `fluxo` | Fastify API 服务 | 127.0.0.1:8090 |
 | `fluxo-web` | Next.js Web UI | 8080 |
 
 #### 首次访问
 
 安装完成后打开 `http://<服务器IP>:8080`，会进入密码设置页，**设置一个密码**即可开始使用。之后每次访问需要输入密码登录。
 
-> Mihomo API（端口 9090）的访问密钥由安装脚本自动生成，无需手动配置。
+> Mihomo API（端口 9090）默认仅本机访问，访问密钥由安装脚本自动生成，无需手动配置。
 
 #### 常用管理命令
 
@@ -156,14 +156,14 @@ Docker 挂载说明：
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `MIHOMO_API_URL` | *(读 DB 设置)* | Mihomo REST API 地址，优先级高于 DB |
-| `MIHOMO_SECRET` | *(自动生成)* | Mihomo API 密钥，与 `MIHOMO_API_URL` 配合使用 |
+| `MIHOMO_SECRET` | *(自动生成/读取配置)* | Mihomo API 密钥，与 `MIHOMO_API_URL` 配合使用 |
 | `CONFIG_PATH` | `/etc/mihomo/config.yaml` | Mihomo 配置文件路径 |
 | `DB_PATH` | `./data/fluxo.db` | SQLite 数据库路径 |
 | `WEB_PORT` | `8080` | Web UI 监听端口 |
 | `SERVER_PORT` | `8090` | API 服务监听端口 |
 | `BACKEND_URL` | `http://127.0.0.1:8090` | Web UI 转发 API 请求的地址（与 `SERVER_PORT` 保持一致） |
 
-> **注意**：`MIHOMO_SECRET` 在首次启动时自动随机生成并存入数据库，无需手动设置。`MIHOMO_API_URL` 设置后优先于数据库中的 `mihomo.external_controller`，适合 Docker 环境下固定连接宿主机 Mihomo。
+> **注意**：`MIHOMO_SECRET` 在直接安装时由安装脚本写入 Mihomo 配置和 Fluxo 服务环境；Docker 场景若挂载了 `CONFIG_PATH`，Fluxo 会读取配置中的非空 `secret`，也可以显式传入 `MIHOMO_SECRET`。
 
 ---
 
@@ -203,8 +203,8 @@ Docker 挂载说明：
 | 端口 | 服务 |
 |------|------|
 | 8080 | Fluxo Web UI |
-| 8090 | Fluxo API Server |
-| 9090 | Mihomo external-controller |
+| 8090 | Fluxo API Server（默认仅本机/容器内访问） |
+| 9090 | Mihomo external-controller（默认仅本机访问，且需要 secret） |
 
 ---
 

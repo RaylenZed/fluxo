@@ -1,5 +1,14 @@
 import yaml from 'js-yaml';
 import { getDb } from '../../database/db';
+import { getSetting, updateSettings } from '../settings/settings.service';
+import { getEffectiveMihomoSecret, getMihomoHeaders } from '../mihomo/mihomo.config';
+
+type MihomoRuntimeProxyState = {
+  all?: string[];
+  now?: string;
+};
+
+type MihomoRuntimeProxyMap = Record<string, MihomoRuntimeProxyState>;
 
 function parseStringList(raw: string | null | undefined): string[] {
   if (!raw) return [];
@@ -8,6 +17,109 @@ function parseStringList(raw: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
   } catch {
     return [];
+  }
+}
+
+function parseInlineList(raw: string | null | undefined, fallback?: string): string[] {
+  const source = raw?.trim() || fallback;
+  if (!source) return [];
+  return source
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseJsonRecord(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readProxyNameAliases(): Record<string, string> {
+  const stored = getSetting('runtime.proxy_name_aliases');
+  return stored && typeof stored === 'object' && !Array.isArray(stored)
+    ? { ...(stored as Record<string, string>) }
+    : {};
+}
+
+function clearProxyNameAliases() {
+  updateSettings({ 'runtime.proxy_name_aliases': {} }, { internal: true });
+}
+
+function resolveRenamedProxyName(name: string, aliases: Record<string, string>): string {
+  let current = name;
+  const visited = new Set<string>();
+
+  while (aliases[current] && !visited.has(current)) {
+    visited.add(current);
+    current = aliases[current];
+  }
+
+  return current;
+}
+
+function parseRuntimeProxyMap(payload: unknown): MihomoRuntimeProxyMap {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
+  const proxies = (payload as { proxies?: unknown }).proxies;
+  return proxies && typeof proxies === 'object' && !Array.isArray(proxies)
+    ? proxies as MihomoRuntimeProxyMap
+    : {};
+}
+
+function collectRuntimeSelections(proxyMap: MihomoRuntimeProxyMap): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(proxyMap)
+      .filter(([, state]) => Array.isArray(state?.all) && typeof state.now === 'string' && state.now.length > 0)
+      .map(([groupName, state]) => [groupName, state.now as string])
+  );
+}
+
+function applyTransportOptions(base: Record<string, unknown>, cfg: Record<string, string>, network: string): void {
+  switch (network) {
+    case 'ws': {
+      const wsOpts: Record<string, unknown> = { path: cfg.wsPath || '/' };
+      const wsHeaders = parseJsonRecord(cfg.wsHeaders);
+      if (wsHeaders) wsOpts.headers = wsHeaders;
+      base['ws-opts'] = wsOpts;
+      break;
+    }
+    case 'http': {
+      const path = parseInlineList(cfg.httpPath, '/');
+      const hosts = parseInlineList(cfg.httpHost);
+      const httpHeaders = parseJsonRecord(cfg.httpHeaders) ?? {};
+      if (hosts.length > 0 && httpHeaders.Host === undefined) {
+        httpHeaders.Host = hosts;
+      }
+
+      const httpOpts: Record<string, unknown> = {
+        method: cfg.httpMethod || 'GET',
+        path: path.length > 0 ? path : ['/'],
+      };
+      if (Object.keys(httpHeaders).length > 0) httpOpts.headers = httpHeaders;
+      base['http-opts'] = httpOpts;
+      break;
+    }
+    case 'h2': {
+      const h2Opts: Record<string, unknown> = { path: cfg.h2Path || '/' };
+      const hosts = parseInlineList(cfg.h2Host);
+      if (hosts.length > 0) h2Opts.host = hosts;
+      base['h2-opts'] = h2Opts;
+      break;
+    }
+    case 'grpc': {
+      const grpcOpts: Record<string, unknown> = {};
+      if (cfg.grpcServiceName) grpcOpts['grpc-service-name'] = cfg.grpcServiceName;
+      if (Object.keys(grpcOpts).length > 0) base['grpc-opts'] = grpcOpts;
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -84,24 +196,28 @@ function normalizeProxy(row: { name: string; type: string; server: string; port:
         if (sni) base.servername = sni;
         if (skipCert) base['skip-cert-verify'] = true;
       }
-      if (cfg.network === 'ws') {
-        const wsOpts: Record<string, unknown> = { path: cfg.wsPath || '/' };
-        if (cfg.wsHeaders) {
-          try { wsOpts.headers = JSON.parse(cfg.wsHeaders); } catch { /* ignore malformed JSON */ }
-        }
-        base['ws-opts'] = wsOpts;
-      }
+      applyTransportOptions(base, cfg, base.network as string);
       break;
     }
     case 'vless': {
       base.uuid = cfg.uuid || '';
       if (cfg.flow && cfg.flow !== '__none__') base.flow = cfg.flow;
       base.network = cfg.network || 'tcp';
-      if (tlsBool) {
+      const security = cfg.security || (tlsBool ? 'tls' : 'none');
+      if (security !== 'none') {
         base.tls = true;
         if (sni) base.servername = sni;
         if (skipCert) base['skip-cert-verify'] = true;
+        if (security === 'reality') {
+          if (cfg.fingerprint) base['client-fingerprint'] = cfg.fingerprint;
+
+          const realityOpts: Record<string, string> = {};
+          if (cfg.publicKey) realityOpts['public-key'] = cfg.publicKey;
+          if (cfg.shortId) realityOpts['short-id'] = cfg.shortId;
+          if (Object.keys(realityOpts).length > 0) base['reality-opts'] = realityOpts;
+        }
       }
+      applyTransportOptions(base, cfg, base.network as string);
       break;
     }
     case 'trojan': {
@@ -110,6 +226,7 @@ function normalizeProxy(row: { name: string; type: string; server: string; port:
       base.tls = true; // Trojan always uses TLS
       if (sni) base.servername = sni;
       if (skipCert) base['skip-cert-verify'] = true;
+      applyTransportOptions(base, cfg, base.network as string);
       break;
     }
     case 'snell': {
@@ -270,15 +387,36 @@ export async function generateConfig(): Promise<string> {
 
   // Load rules
   const ruleRows = db.prepare('SELECT * FROM rules ORDER BY sort_order').all() as any[];
-  const rules = ruleRows.map(row => {
-    if (row.type === 'FINAL') return `MATCH,${row.policy}`;
-    if (row.type === 'RULE-SET') return `RULE-SET,${row.value},${row.policy}`;
-    if (!row.value) return `${row.type},${row.policy}`;
-    const parts = [row.type, row.value, row.policy];
-    // notify column stores the "no-resolve" flag for IP-type rules
-    if (row.notify) parts.push('no-resolve');
-    return parts.join(',');
-  });
+  const explicitRuleSetNames = new Set(
+    ruleRows
+      .filter((row) => row.type === 'RULE-SET' && typeof row.value === 'string' && row.value.length > 0)
+      .map((row) => row.value as string)
+  );
+
+  const normalRules: string[] = [];
+  const finalRules: string[] = [];
+  for (const row of ruleRows) {
+    const rendered = (() => {
+      if (row.type === 'FINAL') return `MATCH,${row.policy}`;
+      if (row.type === 'MATCH') return `MATCH,${row.policy}`;
+      if (row.type === 'RULE-SET') return `RULE-SET,${row.value},${row.policy}`;
+      if (!row.value) return `${row.type},${row.policy}`;
+
+      return [row.type, row.value, row.policy].join(',');
+    })();
+
+    if (row.type === 'FINAL' || row.type === 'MATCH') {
+      finalRules.push(rendered);
+    } else {
+      normalRules.push(rendered);
+    }
+  }
+
+  const autoRuleProviderRules = ruleProviderRows
+    .filter((rp) => !explicitRuleSetNames.has(rp.name))
+    .map((rp) => `RULE-SET,${rp.name},${rp.policy}`);
+
+  const rules = [...normalRules, ...autoRuleProviderRules, ...finalRules];
 
   // Load DNS config
   const dnsRow = db.prepare('SELECT * FROM dns_config WHERE id = 1').get() as any;
@@ -291,7 +429,7 @@ export async function generateConfig(): Promise<string> {
     'log-level': settings['general.log_level'] ?? 'info',
     ipv6: settings['general.ipv6'] ?? false,
     'external-controller': settings['mihomo.external_controller'] ?? '127.0.0.1:9090',
-    ...(settings['mihomo.secret'] ? { secret: settings['mihomo.secret'] } : {}),
+    ...(getEffectiveMihomoSecret() ? { secret: getEffectiveMihomoSecret() } : {}),
   };
 
   // TUN section
@@ -344,11 +482,88 @@ export async function writeConfigAndReload(configPath: string, mihomoApiUrl: str
   const fs = await import('fs/promises');
   const axios = (await import('axios')).default;
 
+  const targetSecret = mihomoSecret ?? '';
+  const headers = getMihomoHeaders(targetSecret);
+
+  const beforeReloadSelections = await axios
+    .get(`${mihomoApiUrl}/proxies`, { headers, timeout: 5000 })
+    .then((res) => collectRuntimeSelections(parseRuntimeProxyMap(res.data)))
+    .catch(() => ({} as Record<string, string>));
+
+  const proxyNameAliases = readProxyNameAliases();
+
   const yamlContent = await generateConfig();
+  const previousConfig = await fs.readFile(configPath, 'utf-8').catch(() => null);
+  const previousSecret = extractConfigSecret(previousConfig);
+  const reloadSecrets = Array.from(new Set([targetSecret, previousSecret, ''].filter((secret): secret is string => secret !== null)));
   await fs.writeFile(configPath, yamlContent, 'utf-8');
 
   // Reload via Mihomo REST API
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (mihomoSecret) headers['Authorization'] = `Bearer ${mihomoSecret}`;
-  await axios.put(`${mihomoApiUrl}/configs`, { path: configPath }, { headers });
+  try {
+    await reloadWithSecrets(axios, mihomoApiUrl, configPath, reloadSecrets);
+  } catch (err) {
+    if (previousConfig !== null) {
+      await fs.writeFile(configPath, previousConfig, 'utf-8');
+      await reloadWithSecrets(axios, mihomoApiUrl, configPath, reloadSecrets).catch(() => undefined);
+    }
+    throw err;
+  }
+
+  try {
+    const runtimeProxyMap = await axios
+      .get(`${mihomoApiUrl}/proxies`, { headers, timeout: 5000 })
+      .then((res) => parseRuntimeProxyMap(res.data));
+
+    for (const [groupName, selectedName] of Object.entries(beforeReloadSelections)) {
+      const runtimeGroup = runtimeProxyMap[groupName];
+      if (!runtimeGroup || !Array.isArray(runtimeGroup.all) || runtimeGroup.all.length === 0) continue;
+
+      const restoredName = resolveRenamedProxyName(selectedName, proxyNameAliases);
+      if (!runtimeGroup.all.includes(restoredName) || runtimeGroup.now === restoredName) continue;
+
+      await axios.put(
+        `${mihomoApiUrl}/proxies/${encodeURIComponent(groupName)}`,
+        { name: restoredName },
+        { headers, timeout: 5000 },
+      );
+    }
+  } finally {
+    clearProxyNameAliases();
+  }
+}
+
+function extractConfigSecret(content: string | null): string | null {
+  if (!content) return null;
+  try {
+    const parsed = yaml.load(content);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const secret = (parsed as Record<string, unknown>).secret;
+      return typeof secret === 'string' ? secret : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function reloadWithSecrets(
+  axios: typeof import('axios').default,
+  mihomoApiUrl: string,
+  configPath: string,
+  secrets: string[],
+) {
+  let lastError: unknown;
+  for (const secret of secrets) {
+    try {
+      await axios.put(
+        `${mihomoApiUrl}/configs`,
+        { path: configPath },
+        { headers: getMihomoHeaders(secret), timeout: 5000 },
+      );
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }

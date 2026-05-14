@@ -5,13 +5,19 @@ import { cn } from "@/lib/utils";
 import {
   Activity, LayoutDashboard, Eye, Cpu, Monitor, GitBranch,
   List, Info, Database, Package, FileText, CalendarClock,
-  Settings, Server, ChevronRight, Zap, Globe, ScrollText, FileCode2
+  Settings, Server, ChevronRight, Zap, Globe, ScrollText, FileCode2, X
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMihomoStatus } from "@/lib/hooks";
 import { useLocale } from "@/lib/i18n/context";
 
-export function Sidebar() {
+interface SidebarProps {
+  mobile?: boolean;
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: statusData } = useMihomoStatus();
   const isRunning = statusData?.running ?? false;
@@ -66,16 +72,35 @@ export function Sidebar() {
     { href: "/system", label: t.nav.system, icon: Server },
   ];
 
-  return (
-    <aside className="flex h-full w-[220px] flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] overflow-hidden shrink-0 rounded-l-[24px]">
+  const sidebarShell = (
+    <aside
+      className={cn(
+        "flex h-full flex-col overflow-hidden bg-[var(--sidebar)]",
+        mobile
+          ? "w-[280px] max-w-[calc(100vw-1rem)] rounded-[20px] border border-[var(--sidebar-border)] shadow-[0_12px_30px_rgba(0,0,0,0.18)]"
+          : "w-[220px] shrink-0 rounded-l-[24px] border-r border-[var(--sidebar-border)]"
+      )}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[var(--brand-500)] shadow-sm">
-          <Zap className="h-4 w-4 text-white" />
+      <div className="flex items-center justify-between gap-2.5 px-5 py-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[var(--brand-500)] shadow-sm">
+            <Zap className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <span className="text-[15px] font-bold tracking-tight text-[var(--brand-500)]">Fluxo</span>
+          </div>
         </div>
-        <div>
-          <span className="text-[15px] font-bold text-[var(--brand-500)] tracking-tight">Fluxo</span>
-        </div>
+        {mobile && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]"
+            aria-label="Close navigation"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Mihomo status */}
@@ -111,6 +136,7 @@ export function Sidebar() {
                     <TooltipTrigger asChild>
                       <Link
                         href={item.href}
+                        onClick={mobile ? onClose : undefined}
                         className={cn(
                           "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-all duration-150 mb-0.5",
                           isActive
@@ -147,6 +173,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={mobile ? onClose : undefined}
               className={cn(
                 "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-all duration-150 mb-0.5",
                 isActive
@@ -187,5 +214,31 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+
+  if (!mobile) {
+    return sidebarShell;
+  }
+
+  return (
+    <>
+      <div
+        className={cn(
+          "fixed inset-0 z-30 bg-black/45 transition-opacity duration-200 md:hidden",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <div
+        className={cn(
+          "fixed inset-y-2 left-2 z-40 transition-transform duration-200 ease-out md:hidden",
+          open ? "translate-x-0" : "-translate-x-[115%]"
+        )}
+      >
+        {sidebarShell}
+      </div>
+    </>
   );
 }

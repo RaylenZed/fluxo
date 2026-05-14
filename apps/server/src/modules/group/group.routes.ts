@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getAllGroups, getGroupById, createGroup, updateGroup, deleteGroup } from './group.service';
+import { getHttpStatus } from '../policy/policy.validation';
 
 export const groupRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/groups', async (_req, reply) => {
@@ -7,7 +8,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
       return getAllGroups();
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -19,7 +20,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
       return group;
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -41,7 +42,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(201).send(result);
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -64,7 +65,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -75,7 +76,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 };

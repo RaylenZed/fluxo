@@ -1,6 +1,5 @@
 import WebSocket from 'ws';
-import { getDb } from '../../database/db';
-import { normalizeControllerHost } from '../mihomo/mihomo.config';
+import { getMihomoConfig } from '../mihomo/mihomo.config';
 
 type WsClient = WebSocket;
 type RelayChannel = 'traffic' | 'connections' | 'logs';
@@ -49,25 +48,10 @@ function broadcast(data: unknown) {
 }
 
 function getMihomoWsConfig(): { host: string; secret: string } {
-  // Env var takes precedence (Docker / systemd overrides)
-  if (process.env.MIHOMO_API_URL) {
-    try {
-      const url = new URL(process.env.MIHOMO_API_URL);
-      return { host: url.host, secret: process.env.MIHOMO_SECRET || '' };
-    } catch {
-      // fall through to DB
-    }
-  }
-  const db = getDb();
-  const apiUrlRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.external_controller'").get() as
-    | { value: string }
-    | undefined;
-  const secretRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.secret'").get() as
-    | { value: string }
-    | undefined;
-  const host = normalizeControllerHost(apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090');
-  const secret = secretRow ? JSON.parse(secretRow.value) : '';
-  return { host, secret };
+  const { apiUrl, secret } = getMihomoConfig();
+  const url = new URL(apiUrl);
+  const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return { host: `${protocol}//${url.host}`, secret };
 }
 
 /**
@@ -154,7 +138,7 @@ export function startMihomoRelay() {
 
   makeRelay(
     'traffic',
-    () => `ws://${host}/traffic${tokenSuffix}`,
+    () => `${host}/traffic${tokenSuffix}`,
     (parsed) => {
       const payload = parsed as { up?: number; down?: number };
       trafficSnapshot.connected = relayStatus.traffic;
@@ -166,7 +150,7 @@ export function startMihomoRelay() {
 
   makeRelay(
     'connections',
-    () => `ws://${host}/connections${tokenSuffix}`,
+    () => `${host}/connections${tokenSuffix}`,
     (parsed) => {
       const p = parsed as { connections?: unknown[]; downloadTotal?: number; uploadTotal?: number };
       connectionsSnapshot.connected = relayStatus.connections;
@@ -186,7 +170,7 @@ export function startMihomoRelay() {
 
   makeRelay(
     'logs',
-    () => `ws://${host}/logs${tokenSuffix}`,
+    () => `${host}/logs${tokenSuffix}`,
     (parsed) => {
       const p = parsed as { type?: string; payload?: string };
       const entry: RealtimeLogEntry = {

@@ -1,10 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fs from 'fs/promises';
 import path from 'path';
+import yaml from 'js-yaml';
 import { generateConfig, writeConfigAndReload } from './config.generator';
 import { reloadConfig } from '../mihomo/mihomo.service';
-import { getSetting } from '../settings/settings.service';
-import { normalizeControllerHost } from '../mihomo/mihomo.config';
+import { getMihomoConfig } from '../mihomo/mihomo.config';
 
 function getConfigPath(): string {
   return process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
@@ -52,23 +52,23 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // Backward-compatible alias used by older frontend code.
+  fastify.get('/config/generate', async (_req, reply) => {
+    try {
+      const yaml = await generateConfig();
+      return reply.type('text/plain').send(yaml);
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(500).send({ error: 'Failed to generate config' });
+    }
+  });
+
   // POST /api/config/apply — generate from DB, write, reload mihomo
   fastify.post('/config/apply', async (_req, reply) => {
     try {
       const configPath = getConfigPath();
-      // Honour MIHOMO_API_URL env var (Docker / systemd override) first,
-      // falling back to the DB-stored external_controller setting.
-      let mihomoApiUrl: string;
-      let mihomoSecret: string | undefined;
-      if (process.env.MIHOMO_API_URL) {
-        mihomoApiUrl = process.env.MIHOMO_API_URL;
-        mihomoSecret = process.env.MIHOMO_SECRET || undefined;
-      } else {
-        const apiHost = normalizeControllerHost((getSetting('mihomo.external_controller') as string) || '127.0.0.1:9090');
-        mihomoApiUrl = `http://${apiHost}`;
-        mihomoSecret = (getSetting('mihomo.secret') as string) || undefined;
-      }
-      await writeConfigAndReload(configPath, mihomoApiUrl, mihomoSecret);
+      const { apiUrl, secret } = getMihomoConfig();
+      await writeConfigAndReload(configPath, apiUrl, secret);
       return { ok: true, configPath };
     } catch (err) {
       fastify.log.error(err);
@@ -83,13 +83,27 @@ export const configRoutes: FastifyPluginAsync = async (fastify) => {
       if (typeof body !== 'string' || !body.trim()) {
         return reply.code(400).send({ error: 'Empty config' });
       }
+      try {
+        yaml.load(body);
+      } catch (parseErr) {
+        return reply.code(400).send({ error: `Invalid YAML: ${(parseErr as Error).message}` });
+      }
       const configPath = getConfigPath();
       const configDir = path.dirname(configPath);
+      const previousConfig = await fs.readFile(configPath, 'utf-8').catch(() => null);
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configPath, body, 'utf-8');
 
       // Reload mihomo (without regenerating the file)
-      await reloadConfig(configPath);
+      try {
+        await reloadConfig(configPath);
+      } catch (reloadErr) {
+        if (previousConfig !== null) {
+          await fs.writeFile(configPath, previousConfig, 'utf-8');
+          await reloadConfig(configPath).catch(() => undefined);
+        }
+        throw reloadErr;
+      }
 
       return { ok: true };
     } catch (err) {

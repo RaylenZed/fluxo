@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getAllProxies, getProxyById, createProxy, updateProxy, deleteProxy } from './proxy.service';
+import { getHttpStatus } from '../policy/policy.validation';
 
 export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/proxies', async (_req, reply) => {
@@ -7,7 +8,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       return getAllProxies();
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -19,7 +20,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       return proxy;
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -36,7 +37,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(201).send(result);
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -54,7 +55,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -65,7 +66,7 @@ export const proxyRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 };

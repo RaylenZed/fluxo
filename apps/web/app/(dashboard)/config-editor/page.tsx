@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Save, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Topbar } from "@/components/layout/topbar";
+import { ModeSegment, Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
 
@@ -13,38 +13,62 @@ const PROTECTED_PORTS: { port: number; service: string }[] = [
   { port: 9090, service: "Mihomo REST API" },
 ];
 
+const PROTECTED_PORT_KEYS = ["port", "socks-port", "mixed-port", "redir-port", "tproxy-port"];
+
+type ConfigSource = "generated" | "raw";
+
 
 export default function ConfigEditorPage() {
   const { t } = useLocale();
   const eT = t.configEditor;
 
   const [yaml, setYaml] = useState("");
+  const [loadedYaml, setLoadedYaml] = useState("");
+  const [source, setSource] = useState<ConfigSource>("generated");
   const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const hasUnsavedChanges = yaml !== loadedYaml;
 
-  async function loadConfig() {
-    setLoading(true);
+  const loadConfig = useCallback(async (nextSource: ConfigSource, initial = false) => {
+    if (initial) {
+      setLoading(true);
+    } else {
+      setReloading(true);
+    }
+
     try {
-      const res = await fetch(`/api/config`);
+      const endpoint = nextSource === "generated" ? "/api/config/generated" : "/api/config";
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error();
       const text = await res.text();
       setYaml(text);
+      setLoadedYaml(text);
+      setSource(nextSource);
     } catch {
       toast.error(t.common.error);
     } finally {
       setLoading(false);
+      setReloading(false);
     }
-  }
+  }, [t.common.error]);
 
-  useEffect(() => { loadConfig(); }, []);
+  useEffect(() => {
+    void loadConfig("generated", true);
+  }, [loadConfig]);
 
-  // Check if config changes any protected port values
+  // Only flag reserved ports when they are assigned to inbound listener keys.
   function checkProtectedPorts(content: string): { port: number; service: string }[] {
     return PROTECTED_PORTS.filter(({ port }) => {
-      const regex = new RegExp(`:\\s*${port}\\b`);
+      const regex = new RegExp(`(^|\\n)(?:${PROTECTED_PORT_KEYS.join("|")}):\\s*${port}\\b`, "m");
       return regex.test(content);
     });
+  }
+
+  async function handleSourceChange(nextSource: ConfigSource) {
+    if (nextSource === source) return;
+    if (hasUnsavedChanges && !window.confirm(eT.discardChangesConfirm)) return;
+    await loadConfig(nextSource);
   }
 
   async function handleSave() {
@@ -65,6 +89,8 @@ export default function ConfigEditorPage() {
         body: JSON.stringify({ yaml }),
       });
       if (!res.ok) throw new Error();
+      setLoadedYaml(yaml);
+      setSource("raw");
       toast.success(eT.saved);
     } catch {
       toast.error(eT.saveFailed);
@@ -73,38 +99,38 @@ export default function ConfigEditorPage() {
     }
   }
 
-  async function handleReset() {
-    setResetting(true);
-    try {
-      const res = await fetch(`/api/config/generated`);
-      if (!res.ok) throw new Error();
-      const text = await res.text();
-      setYaml(text);
-      toast.success(eT.resetDone);
-    } catch {
-      toast.error(eT.resetFailed);
-    } finally {
-      setResetting(false);
-    }
+  async function handleReload() {
+    await loadConfig(source);
   }
+
+  const activeModeLabel = source === "generated" ? eT.generatedMode : eT.rawMode;
+  const activeModeDesc = source === "generated" ? eT.generatedModeDesc : eT.rawModeDesc;
 
   return (
     <div className="flex flex-col h-full">
       <Topbar title={eT.title} description={eT.subtitle}>
+        <ModeSegment
+          options={[
+            { label: eT.sourceGenerated, value: "generated" },
+            { label: eT.sourceRaw, value: "raw" },
+          ]}
+          value={source}
+          onChange={(value) => void handleSourceChange(value as ConfigSource)}
+        />
         <Button
           variant="outline"
           size="sm"
-          onClick={handleReset}
-          disabled={loading || resetting}
+          onClick={() => void handleReload()}
+          disabled={loading || reloading}
           className="gap-2 text-xs"
         >
-          {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          {eT.reset}
+          {reloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+          {eT.reload}
         </Button>
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={loading || saving}
+          disabled={loading || saving || !hasUnsavedChanges}
           className="gap-2 bg-[var(--brand-500)] hover:bg-[var(--brand-600)] text-white text-xs"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -117,8 +143,8 @@ export default function ConfigEditorPage() {
         <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/10 px-3 py-2">
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            <span className="font-semibold">{eT.rawMode}</span> — {eT.rawModeDesc}.&nbsp;
-            {PROTECTED_PORTS.map((p) => `${p.port} (${p.service})`).join(" · ")} 为保留端口，修改可能导致 Fluxo 无法访问。
+            <span className="font-semibold">{activeModeLabel}</span> — {activeModeDesc}&nbsp;
+            {PROTECTED_PORTS.map((p) => `${p.port} (${p.service})`).join(" · ")} {eT.reservedPortsWarning}
           </p>
         </div>
         {loading ? (

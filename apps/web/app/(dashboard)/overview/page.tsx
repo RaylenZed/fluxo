@@ -32,9 +32,21 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours < 24) return `${hours}h ${minutes}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
 export default function OverviewPage() {
   const queryClient = useQueryClient();
   const { t } = useLocale();
+  const [runtimeHost] = useState(() =>
+    typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1'
+  );
 
   // Load settings
   const { data: settings } = useQuery<Record<string, unknown>>({
@@ -76,6 +88,18 @@ export default function OverviewPage() {
     queryKey: ['mihomo', 'memory'],
     queryFn: async () => {
       const res = await fetch(`/api/mihomo/memory`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    refetchInterval: 5_000,
+    retry: false,
+  });
+
+  // Load uptime
+  const { data: uptimeData } = useQuery<{ uptime?: number }>({
+    queryKey: ['mihomo', 'uptime'],
+    queryFn: async () => {
+      const res = await fetch(`/api/mihomo/uptime`);
       if (!res.ok) return {};
       return res.json();
     },
@@ -125,6 +149,30 @@ export default function OverviewPage() {
   const currentMode = (settings?.['general.mode'] as string) ?? 'rule';
   const connectionCount = connectionsData?.connections?.length ?? 0;
   const memoryInuse = memoryData?.inuse;
+  const uptime = uptimeData?.uptime;
+
+  const parseControllerAddress = (value: string) => {
+    try {
+      const normalized = value.includes('://') ? value : `http://${value}`;
+      const parsed = new URL(normalized);
+      const port = parsed.port || '80';
+      const isBindAddress = parsed.hostname === '0.0.0.0' || parsed.hostname === '::';
+      return { host: parsed.hostname, port, isBindAddress };
+    } catch {
+      return null;
+    }
+  };
+
+  const parsedController = parseControllerAddress(externalController);
+  const isBindController = parsedController?.isBindAddress ?? false;
+  const resolvedControllerHost = isBindController ? runtimeHost : parsedController?.host;
+  const resolvedControllerPort = parsedController?.port;
+  const controllerDisplayValue = resolvedControllerHost && resolvedControllerPort
+    ? `${resolvedControllerHost}:${resolvedControllerPort}`
+    : externalController;
+  const dashboardUrl = resolvedControllerHost && resolvedControllerPort
+    ? `http://${resolvedControllerHost}:${resolvedControllerPort}/ui`
+    : `http://${externalController}/ui`;
 
   const proxyAddresses = [
     { label: t.overview.httpProxy, value: `127.0.0.1:${mixedPort}` },
@@ -153,7 +201,7 @@ export default function OverviewPage() {
     },
     {
       label: t.dashboard.uptime,
-      value: 'N/A',
+      value: uptime != null ? formatUptime(uptime) : 'N/A',
       icon: Clock,
       iconColor: 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/20',
     },
@@ -266,9 +314,9 @@ export default function OverviewPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: t.overview.externalController, value: externalController, icon: Globe },
+                { label: t.overview.externalController, value: controllerDisplayValue, icon: Globe },
                 { label: t.overview.apiSecret, value: '••••••••••••••••', icon: Lock },
-                { label: 'Web Dashboard', value: `http://${externalController}/ui`, icon: LayoutDashboard },
+                { label: 'Web Dashboard', value: dashboardUrl, icon: LayoutDashboard },
               ].map((info) => (
                 <div key={info.label} className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)]">
@@ -277,6 +325,9 @@ export default function OverviewPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-[var(--muted)]">{info.label}</p>
                     <p className="text-sm font-mono text-[var(--foreground)] truncate">{info.value}</p>
+                    {info.label === t.overview.externalController && isBindController && (
+                      <p className="text-[10px] text-[var(--muted)] mt-0.5">Bind address detected, showing current host for access</p>
+                    )}
                   </div>
                   <CopyButton text={info.value} />
                 </div>

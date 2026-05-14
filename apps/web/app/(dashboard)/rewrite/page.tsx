@@ -3,11 +3,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Loader2, Database, Globe, Map } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
@@ -27,6 +26,10 @@ interface RuleProvider {
   updated_at: string;
 }
 
+interface Group {
+  name: string;
+}
+
 function useRuleProviders() {
   return useQuery({
     queryKey: ["rule-providers"],
@@ -34,6 +37,17 @@ function useRuleProviders() {
       const res = await fetch(`/api/rule-providers`);
       if (!res.ok) throw new Error("Failed to load rule providers");
       return res.json() as Promise<RuleProvider[]>;
+    },
+  });
+}
+
+function useGroups() {
+  return useQuery({
+    queryKey: ["groups"],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups`);
+      if (!res.ok) throw new Error("Failed to load groups");
+      return res.json() as Promise<Group[]>;
     },
   });
 }
@@ -61,6 +75,7 @@ export default function RuleProvidersPage() {
 
   const qc = useQueryClient();
   const { data: providers = [], isLoading } = useRuleProviders();
+  const { data: groups = [] } = useGroups();
 
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState({
@@ -71,6 +86,12 @@ export default function RuleProvidersPage() {
     policy: "DIRECT",
     interval: "86400",
   });
+
+  const policies = [
+    "DIRECT",
+    "REJECT",
+    ...groups.map((group) => group.name),
+  ].filter((policy, index, all) => all.indexOf(policy) === index);
 
   const defaultQuickAdd = [
     {
@@ -247,6 +268,7 @@ export default function RuleProvidersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{rT.addRuleSet}</DialogTitle>
+            <DialogDescription>{rT.addRuleSetDescription}</DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-2 space-y-4">
             <div className="space-y-1.5">
@@ -283,7 +305,16 @@ export default function RuleProvidersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-[var(--foreground)]">{rT.policyLabel}</label>
-                <Input value={form.policy} onChange={(e) => setForm((f) => ({ ...f, policy: e.target.value }))} placeholder="DIRECT" />
+                <Select value={form.policy} onValueChange={(v) => setForm((f) => ({ ...f, policy: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="DIRECT" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {policies.map((policy) => (
+                      <SelectItem key={policy} value={policy}>{policy}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-[var(--foreground)]">{rT.intervalLabel}</label>

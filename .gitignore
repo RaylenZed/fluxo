@@ -41,3 +41,4 @@ Thumbs.db
 # Additional env files
 .env.development
 .env.test
+.gstack/

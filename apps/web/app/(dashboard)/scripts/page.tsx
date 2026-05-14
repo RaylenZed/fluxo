@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
-import { CalendarClock, Play, RefreshCw, Database, Shield } from "lucide-react";
+import { CalendarClock, Play, RefreshCw, Database, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
 import { toast } from "sonner";
@@ -18,6 +17,8 @@ interface Task {
   lastRun: string | null;
   enabled: boolean;
   icon: React.ElementType;
+  method: "POST" | "PUT";
+  endpoint: string;
 }
 
 export default function TasksPage() {
@@ -31,8 +32,10 @@ export default function TasksPage() {
       description: tT.task1Desc,
       schedule: tT.task1Schedule,
       lastRun: null,
-      enabled: false,
+      enabled: true,
       icon: RefreshCw,
+      method: "PUT",
+      endpoint: "/api/mihomo/providers/update",
     },
     {
       id: "2",
@@ -40,30 +43,30 @@ export default function TasksPage() {
       description: tT.task2Desc,
       schedule: tT.task2Schedule,
       lastRun: null,
-      enabled: false,
+      enabled: true,
       icon: Database,
-    },
-    {
-      id: "3",
-      name: tT.task3Name,
-      description: tT.task3Desc,
-      schedule: tT.task3Schedule,
-      lastRun: null,
-      enabled: false,
-      icon: Shield,
+      method: "POST",
+      endpoint: "/api/mihomo/geo/update",
     },
   ];
 
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
 
-  const toggleTask = (id: string) => {
-    setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, enabled: !task.enabled } : task)));
-  };
+  const handleRunNow = async (task: Task) => {
+    setRunningTaskId(task.id);
+    try {
+      const res = await fetch(task.endpoint, { method: task.method });
+      if (!res.ok) throw new Error(await res.text());
 
-  const handleRunNow = (task: Task) => {
-    toast.info(`${tT.runNow}: "${task.name}"`, {
-      description: tT.scheduledTasksDesc,
-    });
+      const now = new Date().toLocaleString();
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, lastRun: now } : item)));
+      toast.success(`${tT.runNow}: "${task.name}"`);
+    } catch {
+      toast.error(`${tT.runNow}: "${task.name}"`);
+    } finally {
+      setRunningTaskId(null);
+    }
   };
 
   return (
@@ -112,11 +115,11 @@ export default function TasksPage() {
                     variant="outline"
                     className="gap-1.5 text-xs"
                     onClick={() => handleRunNow(task)}
+                    disabled={runningTaskId === task.id}
                   >
-                    <Play className="h-3 w-3" />
+                    {runningTaskId === task.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                     {tT.runNow}
                   </Button>
-                  <Switch checked={task.enabled} onCheckedChange={() => toggleTask(task.id)} />
                 </div>
               </div>
             </Card>
@@ -141,7 +144,8 @@ export default function TasksPage() {
   <array>
     <string>curl</string>
     <string>-X</string><string>PUT</string>
-    <string>http://localhost:8090/api/mihomo/providers/update</string>
+    <string>-H</string><string>Authorization: Bearer <mihomo-secret></string>
+    <string>http://127.0.0.1:9090/providers/proxies/<provider-name></string>
   </array>
   <key>StartInterval</key><integer>86400</integer>
 </dict>
@@ -150,8 +154,8 @@ export default function TasksPage() {
             <div className="space-y-2">
               <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Linux (cron)</p>
               <pre className="text-xs font-mono text-[var(--foreground)] bg-[var(--surface-2)] border border-[var(--border)] rounded-[10px] p-3 overflow-auto">{`# Add to crontab: crontab -e
-0 */24 * * * curl -X PUT http://localhost:8090/api/mihomo/providers/update
-0 0 */7 * * curl -X PUT http://localhost:8090/api/mihomo/geo/update`}</pre>
+0 */24 * * * curl -H 'Authorization: Bearer <mihomo-secret>' -X PUT http://127.0.0.1:9090/providers/proxies/<provider-name>
+0 0 */7 * * curl -H 'Authorization: Bearer <mihomo-secret>' -X POST http://127.0.0.1:9090/configs/geo`}</pre>
             </div>
           </CardContent>
         </Card>

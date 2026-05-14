@@ -12,7 +12,11 @@ export function useCreateProxy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: proxiesApi.create,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['proxies'] }); toast.success('Proxy node added'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proxies'] });
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      toast.success('Proxy node added');
+    },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 }
@@ -22,7 +26,11 @@ export function useUpdateProxy() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof proxiesApi.update>[1] }) =>
       proxiesApi.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['proxies'] }); toast.success('Proxy node updated'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proxies'] });
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      toast.success('Proxy node updated');
+    },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 }
@@ -31,7 +39,11 @@ export function useDeleteProxy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: proxiesApi.delete,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['proxies'] }); toast.success('Proxy node deleted'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proxies'] });
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      toast.success('Proxy node deleted');
+    },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 }
@@ -125,9 +137,14 @@ export function useUpdateSettings() {
 }
 
 export function useApplyConfig() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: settingsApi.applyConfig,
-    onSuccess: () => toast.success('Config applied to Mihomo'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mihomo', 'proxies'] });
+      qc.invalidateQueries({ queryKey: ['mihomo', 'status'] });
+      toast.success('Config applied to Mihomo');
+    },
     onError: (e: Error) => toast.error(`Apply failed: ${e.message}`),
   });
 }
@@ -171,6 +188,16 @@ export function useMihomoStatus() {
     queryFn: mihomoApi.status,
     refetchInterval: 10_000,
     retry: false,
+  });
+}
+
+export function useMihomoProxies() {
+  return useQuery({
+    queryKey: ['mihomo', 'proxies'],
+    queryFn: mihomoApi.proxies,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    retry: 1,
   });
 }
 

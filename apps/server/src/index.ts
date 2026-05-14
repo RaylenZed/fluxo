@@ -27,9 +27,22 @@ const PUBLIC_ROUTES = new Set([
   '/health',
 ]);
 
+function getBearerToken(authorization: string | undefined): string | undefined {
+  return authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
+}
+
+function getTokenFromCookieHeader(cookieHeader: string | undefined): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const pair of cookieHeader.split(';')) {
+    const [rawKey, ...rawValue] = pair.trim().split('=');
+    if (rawKey === COOKIE_NAME) return decodeURIComponent(rawValue.join('='));
+  }
+  return undefined;
+}
+
 async function main() {
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true,
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : false,
     credentials: true,
   });
   await app.register(cookie);
@@ -38,11 +51,9 @@ async function main() {
   // Global authentication preHandler — runs before every route handler
   app.addHook('preHandler', async (req, reply) => {
     if (PUBLIC_ROUTES.has(req.url.split('?')[0])) return;
-    // WebSocket endpoint also skips auth (frontend connects after page load)
-    if (req.url === '/ws') return;
 
     const token = (req.cookies as Record<string, string>)[COOKIE_NAME]
-      ?? (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : undefined);
+      ?? getBearerToken(req.headers.authorization);
 
     if (!token || !verifyToken(token)) {
       return reply.code(401).send({ error: 'Unauthorized' });
@@ -77,7 +88,16 @@ async function main() {
   await app.register(realtimeRoutes, { prefix: '/api' });
 
   // WebSocket endpoint for real-time data
-  app.get('/ws', { websocket: true }, (socket) => {
+  app.get('/ws', { websocket: true }, (socket, req) => {
+    const token = (req.cookies as Record<string, string> | undefined)?.[COOKIE_NAME]
+      ?? getTokenFromCookieHeader(req.headers.cookie)
+      ?? getBearerToken(req.headers.authorization);
+
+    if (!token || !verifyToken(token)) {
+      socket.close(1008, 'Unauthorized');
+      return;
+    }
+
     addClient(socket as unknown as import('ws'));
   });
 

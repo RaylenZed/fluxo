@@ -62,6 +62,18 @@ export interface ProfileRow {
   updated_at: string;
 }
 
+export interface MihomoProxyState {
+  name: string;
+  type: string;
+  all?: string[];
+  now?: string;
+  alive?: boolean;
+}
+
+export interface MihomoProxiesResponse {
+  proxies: Record<string, MihomoProxyState>;
+}
+
 // --- Proxies ---
 export const proxiesApi = {
   list: () => request<ProxyRow[]>('/api/proxies'),
@@ -102,7 +114,7 @@ export const settingsApi = {
   get: () => request<Record<string, unknown>>('/api/settings'),
   update: (data: Record<string, unknown>) =>
     request<{ ok: boolean }>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
-  generateConfig: () => request<string>('/api/config/generate'),
+  generateConfig: () => request<string>('/api/config/generated'),
   applyConfig: () => request<{ ok: boolean; configPath: string }>('/api/config/apply', { method: 'POST' }),
 };
 
@@ -123,6 +135,7 @@ export const profilesApi = {
 export const mihomoApi = {
   status: () => request<{ running: boolean; version: string | null }>('/api/mihomo/status'),
   version: () => request<{ version: string }>('/api/mihomo/version'),
+  proxies: () => request<MihomoProxiesResponse>('/api/mihomo/proxies'),
   connections: () => request<{ connections: unknown[]; downloadTotal: number; uploadTotal: number }>('/api/mihomo/connections'),
   closeAllConnections: () => request<void>('/api/mihomo/connections', { method: 'DELETE' }),
   closeConnection: (id: string) => request<void>(`/api/mihomo/connections/${id}`, { method: 'DELETE' }),

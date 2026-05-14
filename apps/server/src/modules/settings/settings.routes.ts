@@ -1,10 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getAllSettings, updateSettings } from './settings.service';
+import { getPublicSettings, updateSettings } from './settings.service';
 
 export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/settings', async (_req, reply) => {
     try {
-      return getAllSettings();
+      return getPublicSettings();
     } catch (err) {
       fastify.log.error(err);
       reply.code(500).send({ error: 'Internal server error' });
@@ -18,7 +18,10 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      const statusCode = typeof (err as { statusCode?: unknown }).statusCode === 'number'
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+      reply.code(statusCode).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 };

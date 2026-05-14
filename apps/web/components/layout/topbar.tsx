@@ -115,7 +115,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-3 bg-[var(--background)]/90 backdrop-blur-md px-5 border-b border-[var(--border)]">
       {/* Page title */}
-      <div className="flex items-center gap-2 min-w-[140px] shrink-0">
+      <div className="flex min-w-[140px] shrink-0 items-center gap-2 pl-12 md:pl-0">
         <h1 className="text-[15px] font-bold text-[var(--foreground)] truncate">{title}</h1>
         {description && (
           <span className="hidden lg:block text-xs text-[var(--muted)] truncate">{description}</span>

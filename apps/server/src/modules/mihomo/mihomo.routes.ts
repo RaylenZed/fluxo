@@ -4,8 +4,7 @@ import net from 'net';
 import axios from 'axios';
 import { getDb } from '../../database/db';
 import { writeConfigAndReload } from '../config/config.generator';
-import { getSetting } from '../settings/settings.service';
-import { normalizeControllerHost } from './mihomo.config';
+import { getMihomoConfig, getMihomoHeaders } from './mihomo.config';
 import {
   getMihomoStatus,
   getMihomoVersion,
@@ -18,32 +17,6 @@ import {
 
 function getConfigPath(): string {
   return process.env.CONFIG_PATH || '/etc/mihomo/config.yaml';
-}
-
-function getMihomoConfig(): { apiUrl: string; secret: string } {
-  // Env vars take precedence (Docker / systemd overrides)
-  if (process.env.MIHOMO_API_URL) {
-    return {
-      apiUrl: process.env.MIHOMO_API_URL,
-      secret: process.env.MIHOMO_SECRET || '',
-    };
-  }
-  const db = getDb();
-  const apiUrlRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.external_controller'").get() as
-    | { value: string }
-    | undefined;
-  const secretRow = db.prepare("SELECT value FROM settings WHERE key = 'mihomo.secret'").get() as
-    | { value: string }
-    | undefined;
-  const host = normalizeControllerHost(apiUrlRow ? JSON.parse(apiUrlRow.value) : '127.0.0.1:9090');
-  const secret = secretRow ? JSON.parse(secretRow.value) : '';
-  return { apiUrl: `http://${host}`, secret };
-}
-
-function getHeaders(secret: string): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (secret) h['Authorization'] = `Bearer ${secret}`;
-  return h;
 }
 
 function getAxiosErrorDetails(
@@ -74,6 +47,20 @@ function getAxiosErrorDetails(
   }
 
   return { statusCode, error, errorType };
+}
+
+function parseMemoryPayload(rawLine: string): { inuse?: number; oslimit?: number } | null {
+  const normalized = rawLine.startsWith('data:') ? rawLine.slice(5).trim() : rawLine.trim();
+  if (!normalized) return null;
+
+  try {
+    const parsed = JSON.parse(normalized);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as { inuse?: number; oslimit?: number }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
@@ -149,7 +136,7 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/mihomo/test-ip', async (_req, reply) => {
     try {
       const { apiUrl, secret } = getMihomoConfig();
-      const headers = getHeaders(secret);
+      const headers = getMihomoHeaders(secret);
       const res = await axios.get(`${apiUrl}/proxies`, { headers });
       return { ok: true, data: res.data };
     } catch (err) {
@@ -162,7 +149,7 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/mihomo/proxies', async (_req, reply) => {
     try {
       const { apiUrl, secret } = getMihomoConfig();
-      const headers = getHeaders(secret);
+      const headers = getMihomoHeaders(secret);
       const res = await axios.get(`${apiUrl}/proxies`, { headers, timeout: 5000 });
       return res.data;
     } catch (err) {
@@ -176,28 +163,69 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const { apiUrl, secret } = getMihomoConfig();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
       const res = await axios.get(`${apiUrl}/memory`, {
-        headers: getHeaders(secret),
+        headers: getMihomoHeaders(secret),
         responseType: 'stream',
         timeout: 4000,
         signal: controller.signal,
       });
+
       return new Promise<void>((resolve) => {
         let buf = '';
+        let latest: { inuse?: number; oslimit?: number } | null = null;
+        let settled = false;
+
+        const hardTimeout = setTimeout(() => finish(latest), 3000);
+
+        function cleanup() {
+          clearTimeout(hardTimeout);
+          controller.abort();
+        }
+
+        function finish(payload: { inuse?: number; oslimit?: number } | null) {
+          if (settled) return;
+          settled = true;
+          cleanup();
+
+          if (payload) {
+            reply.send({ ...payload, connected: true });
+          } else {
+            reply.send({ inuse: null, connected: false });
+          }
+
+          resolve();
+        }
+
+        function handlePayload(payload: { inuse?: number; oslimit?: number }) {
+          latest = payload;
+
+          if (typeof payload.inuse === 'number' && payload.inuse > 0) {
+            finish(payload);
+          }
+        }
+
+        function flushLines() {
+          const lines = buf.split(/\r?\n/);
+          buf = lines.pop() ?? '';
+
+          for (const line of lines) {
+            const payload = parseMemoryPayload(line);
+            if (payload) handlePayload(payload);
+            if (settled) return;
+          }
+        }
+
         res.data.on('data', (chunk: Buffer) => {
           buf += chunk.toString();
-          // SSE lines look like: data: {"inuse":12345}
-          const match = buf.match(/data:\s*(\{.*?\})/);
-          if (match) {
-            clearTimeout(timer);
-            controller.abort();
-            try { reply.send({ ...JSON.parse(match[1]), connected: true }); } catch (err) { fastify.log.warn({ err }, 'Failed to parse memory payload'); reply.send({ inuse: null, connected: false }); }
-            resolve();
-          }
+          flushLines();
         });
-        res.data.on('error', () => { clearTimeout(timer); reply.send({ inuse: null, connected: false }); resolve(); });
-        res.data.on('end', () => { clearTimeout(timer); if (!reply.sent) reply.send({ inuse: null, connected: false }); resolve(); });
+
+        res.data.on('error', () => finish(latest));
+        res.data.on('end', () => {
+          const payload = parseMemoryPayload(buf);
+          if (payload) latest = payload;
+          finish(latest);
+        });
       });
     } catch (err) {
       fastify.log.debug({ err }, 'Failed to stream memory from Mihomo');
@@ -265,13 +293,14 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/mihomo/test — test a proxy node latency
   fastify.post('/mihomo/test', async (req, reply) => {
     try {
-      const body = req.body as { name: string; url?: string; timeout?: number };
+      const body = req.body as { name: string; url?: string; timeout?: number; kind?: 'proxy' | 'group' };
       const { apiUrl, secret } = getMihomoConfig();
       const testUrl = body.url ?? 'https://www.google.com/generate_204';
       const timeout = body.timeout ?? 5000;
+      const endpointBase = body.kind === 'group' ? 'group' : 'proxies';
       const res = await axios.get(
-        `${apiUrl}/proxies/${encodeURIComponent(body.name)}/delay?url=${encodeURIComponent(testUrl)}&timeout=${timeout}`,
-        { headers: getHeaders(secret), timeout: timeout + 1000 }
+        `${apiUrl}/${endpointBase}/${encodeURIComponent(body.name)}/delay?url=${encodeURIComponent(testUrl)}&timeout=${timeout}`,
+        { headers: getMihomoHeaders(secret), timeout: timeout + 1000 }
       );
       return res.data; // { delay: number }
     } catch (err) {
@@ -290,12 +319,13 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
       await axios.put(
         `${apiUrl}/proxies/${encodeURIComponent(name)}`,
         { name: body.name },
-        { headers: getHeaders(secret), timeout: 5000 }
+        { headers: getMihomoHeaders(secret), timeout: 5000 }
       );
       return { ok: true };
     } catch (err) {
       fastify.log.error({ err }, 'Failed to switch proxy in group');
-      reply.code(503).send({ error: 'Mihomo not reachable' });
+      const details = getAxiosErrorDetails(err, 'Failed to switch proxy in group');
+      reply.code(details.statusCode).send(details);
     }
   });
 
@@ -304,7 +334,7 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const body = req.body as { mode: 'rule' | 'global' | 'direct' };
       const { apiUrl, secret } = getMihomoConfig();
-      await axios.patch(`${apiUrl}/configs`, { mode: body.mode }, { headers: getHeaders(secret), timeout: 5000 });
+      await axios.patch(`${apiUrl}/configs`, { mode: body.mode }, { headers: getMihomoHeaders(secret), timeout: 5000 });
       return { ok: true };
     } catch (err) {
       fastify.log.error({ err }, 'Failed to set mihomo mode');
@@ -329,17 +359,20 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST|PUT /api/mihomo/providers/:name/update — trigger provider update in Mihomo
-  // (frontend uses PUT; both methods registered for compatibility)
+  async function updateProviderByName(name: string) {
+    const { apiUrl, secret } = getMihomoConfig();
+    await axios.put(
+      `${apiUrl}/providers/proxies/${encodeURIComponent(name)}`,
+      {},
+      { headers: getMihomoHeaders(secret), timeout: 10000 }
+    );
+  }
+
+  // POST|PUT /api/mihomo/providers/:name/update — trigger one provider update in Mihomo
   async function updateProvider(req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) {
     try {
       const { name } = req.params as { name: string };
-      const { apiUrl, secret } = getMihomoConfig();
-      await axios.put(
-        `${apiUrl}/providers/proxies/${encodeURIComponent(name)}`,
-        {},
-        { headers: getHeaders(secret), timeout: 10000 }
-      );
+      await updateProviderByName(name);
       return { ok: true };
     } catch (err) {
       fastify.log.error({ err }, 'Failed to update provider');
@@ -349,11 +382,31 @@ export const mihomoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/mihomo/providers/:name/update', updateProvider);
   fastify.put('/mihomo/providers/:name/update', updateProvider);
 
+  // POST|PUT /api/mihomo/providers/update — update all configured providers.
+  async function updateAllProviders(_req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) {
+    try {
+      const providers = getDb().prepare('SELECT name FROM providers ORDER BY name').all() as Array<{ name: string }>;
+      const results = await Promise.allSettled(providers.map((provider) => updateProviderByName(provider.name)));
+      const failed = results.filter((result) => result.status === 'rejected').length;
+
+      if (failed > 0) {
+        return reply.code(207).send({ ok: false, updated: providers.length - failed, failed });
+      }
+
+      return { ok: true, updated: providers.length, failed: 0 };
+    } catch (err) {
+      fastify.log.error({ err }, 'Failed to update all providers');
+      reply.code(503).send({ error: 'Mihomo not reachable or providers not found' });
+    }
+  }
+  fastify.post('/mihomo/providers/update', updateAllProviders);
+  fastify.put('/mihomo/providers/update', updateAllProviders);
+
   // POST /api/mihomo/geo/update — update GEO databases
   fastify.post('/mihomo/geo/update', async (_req, reply) => {
     try {
       const { apiUrl, secret } = getMihomoConfig();
-      await axios.post(`${apiUrl}/configs/geo`, {}, { headers: getHeaders(secret), timeout: 30000 });
+      await axios.post(`${apiUrl}/configs/geo`, {}, { headers: getMihomoHeaders(secret), timeout: 30000 });
       return { ok: true };
     } catch (err) {
       fastify.log.error({ err }, 'Failed to trigger geo update');

@@ -7,6 +7,7 @@ import {
   deleteProfile,
   activateProfile,
 } from './profile.service';
+import { getHttpStatus } from '../policy/policy.validation';
 
 export const profileRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/profiles', async (_req, reply) => {
@@ -14,7 +15,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       return getAllProfiles();
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -26,7 +27,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       return profile;
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -37,7 +38,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(201).send(result);
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -49,7 +50,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -60,7 +61,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 
@@ -71,7 +72,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(200).send({ ok: true });
     } catch (err) {
       fastify.log.error(err);
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
     }
   });
 };

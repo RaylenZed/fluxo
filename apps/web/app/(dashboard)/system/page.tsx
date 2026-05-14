@@ -2,7 +2,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { RotateCw, Server, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Topbar } from "@/components/layout/topbar";
@@ -17,24 +17,37 @@ async function ft(url: string, ms = 5000) {
   catch { return null; } finally { clearTimeout(id); }
 }
 
-function useSystemStatus() {
+function useMihomoStatus() {
   return useQuery({
-    queryKey: ["system", "status"],
-    queryFn: async () => {
-      const [statusRes, memRes, connRes, uptimeRes] = await Promise.all([
-        ft(`/api/mihomo/status`, 5000),
-        ft(`/api/mihomo/memory`, 4000),
-        ft(`/api/mihomo/connections`, 5000),
-        ft(`/api/mihomo/uptime`, 3000),
-      ]);
-      return {
-        running: Boolean(statusRes?.running),
-        version: (statusRes?.version as string | null) ?? null,
-        memory: (memRes?.inuse as number) ?? null,
-        connections: ((connRes?.connections as unknown[]) ?? []).length,
-        uptime: (uptimeRes?.uptime as number | null) ?? null,
-      };
-    },
+    queryKey: ["system", "mihomo", "status"],
+    queryFn: async () => ft(`/api/mihomo/status`, 5000),
+    refetchInterval: 10_000,
+    retry: false,
+  });
+}
+
+function useMihomoMemory() {
+  return useQuery({
+    queryKey: ["system", "mihomo", "memory"],
+    queryFn: async () => ft(`/api/mihomo/memory`, 4000),
+    refetchInterval: 10_000,
+    retry: false,
+  });
+}
+
+function useMihomoConnections() {
+  return useQuery({
+    queryKey: ["system", "mihomo", "connections"],
+    queryFn: async () => ft(`/api/mihomo/connections`, 5000),
+    refetchInterval: 10_000,
+    retry: false,
+  });
+}
+
+function useMihomoUptime() {
+  return useQuery({
+    queryKey: ["system", "mihomo", "uptime"],
+    queryFn: async () => ft(`/api/mihomo/uptime`, 3000),
     refetchInterval: 10_000,
     retry: false,
   });
@@ -48,14 +61,17 @@ function fmtUptime(s: number): string {
 }
 
 function ServiceCard({
-  label, running, version, memory, connections, uptime, onRestart, restarting, t,
+  label, running, version, memory, connections, uptime, showMemory, showConnections, showUptime, onRestart, restarting, t,
 }: {
   label: string;
   running: boolean;
   version?: string | null;
   memory?: number | null;
-  connections?: number;
+  connections?: number | null;
   uptime?: number | null;
+  showMemory?: boolean;
+  showConnections?: boolean;
+  showUptime?: boolean;
   onRestart?: () => void;
   restarting?: boolean;
   t: { version: string; memory: string; connections: string; openConnections: string; restart: string; running: string; stopped: string; uptime?: string };
@@ -100,22 +116,22 @@ function ServiceCard({
             <p className="text-sm font-mono font-semibold text-[var(--foreground)] mt-0.5">{version}</p>
           </div>
         )}
-        {memory != null && (
+        {showMemory && (
           <div className="rounded-[10px] bg-[var(--surface-2)] px-3 py-2">
             <p className="text-[10px] text-[var(--muted)] font-medium">{t.memory}</p>
-            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{formatBytes(memory)}</p>
+            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{memory != null ? formatBytes(memory) : "N/A"}</p>
           </div>
         )}
-        {connections != null && (
+        {showConnections && (
           <div className="rounded-[10px] bg-[var(--surface-2)] px-3 py-2">
             <p className="text-[10px] text-[var(--muted)] font-medium">{t.connections}</p>
-            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{connections} {t.openConnections}</p>
+            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{connections != null ? `${connections} ${t.openConnections}` : "N/A"}</p>
           </div>
         )}
-        {uptime != null && t.uptime && (
+        {showUptime && t.uptime && (
           <div className="rounded-[10px] bg-[var(--surface-2)] px-3 py-2">
             <p className="text-[10px] text-[var(--muted)] font-medium">{t.uptime}</p>
-            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{fmtUptime(uptime)}</p>
+            <p className="text-sm font-semibold text-[var(--foreground)] mt-0.5">{uptime != null ? fmtUptime(uptime) : "N/A"}</p>
           </div>
         )}
       </div>
@@ -125,7 +141,10 @@ function ServiceCard({
 
 export default function SystemPage() {
   const { t } = useLocale();
-  const { data, isLoading } = useSystemStatus();
+  const { data: statusData } = useMihomoStatus();
+  const { data: memoryData } = useMihomoMemory();
+  const { data: connectionsData } = useMihomoConnections();
+  const { data: uptimeData } = useMihomoUptime();
 
   const restartMihomo = useMutation({
     mutationFn: async () => {
@@ -138,36 +157,40 @@ export default function SystemPage() {
   });
 
   const sysT = t.system;
+  const running = Boolean(statusData?.running);
+  const version = (statusData?.version as string | null) ?? null;
+  const memory = (memoryData?.inuse as number | null) ?? null;
+  const connections = Array.isArray(connectionsData?.connections)
+    ? connectionsData.connections.length
+    : null;
+  const uptime = (uptimeData?.uptime as number | null) ?? null;
 
   return (
     <div className="flex flex-col h-full">
       <Topbar title={sysT.title} description={sysT.subtitle} />
       <div className="flex-1 p-6 overflow-auto space-y-4">
-        {isLoading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ServiceCard
-              label={sysT.mihomoService}
-              running={data?.running ?? false}
-              version={data?.version}
-              memory={data?.memory}
-              connections={data?.connections}
-              uptime={data?.uptime}
-              onRestart={() => restartMihomo.mutate()}
-              restarting={restartMihomo.isPending}
-              t={sysT}
-            />
-            <ServiceCard
-              label={sysT.fluxoService}
-              running={true}
-              version={undefined}
-              t={sysT}
-            />
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ServiceCard
+            label={sysT.mihomoService}
+            running={running}
+            version={version}
+            memory={memory}
+            connections={connections}
+            uptime={uptime}
+            showMemory
+            showConnections
+            showUptime
+            onRestart={() => restartMihomo.mutate()}
+            restarting={restartMihomo.isPending}
+            t={sysT}
+          />
+          <ServiceCard
+            label={sysT.fluxoService}
+            running={true}
+            version={undefined}
+            t={sysT}
+          />
+        </div>
       </div>
     </div>
   );

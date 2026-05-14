@@ -14,7 +14,7 @@ export type ProxyType =
   | "trojan"
   | "anytls"
   | "tuic"
-  | "tuic5"
+  | "tuicv5"
   | "hysteria2"
   | "wireguard";
 

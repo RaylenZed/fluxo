@@ -48,12 +48,17 @@ interface ParsedProxy {
   extra: IV;
 }
 
+function stringifyHostHeader(host: string | undefined): string {
+  return host ? JSON.stringify({ Host: host }) : "";
+}
+
 function parseProxyUrl(raw: string): ParsedProxy | null {
   const url = raw.trim();
   try {
     if (url.startsWith("vmess://")) {
       const b64 = url.slice(8).split("#")[0];
       const json = JSON.parse(atob(b64));
+      const network = json.net ?? "tcp";
       return {
         protocol: "VMess",
         server: json.add ?? "",
@@ -63,9 +68,11 @@ function parseProxyUrl(raw: string): ParsedProxy | null {
           uuid: json.id ?? "",
           alterId: String(json.aid ?? "0"),
           cipher: json.scy ?? json.type ?? "auto",
-          network: json.net ?? "tcp",
-          wsPath: json.path ?? "/",
-          wsHeaders: json.host ? `{"Host":"${json.host}"}` : "",
+          network,
+          ...(network === "ws" ? { wsPath: json.path ?? "/", wsHeaders: stringifyHostHeader(json.host) } : {}),
+          ...(network === "http" ? { httpPath: json.path ?? "/", httpHost: json.host ?? "" } : {}),
+          ...(network === "h2" ? { h2Path: json.path ?? "/", h2Host: json.host ?? "" } : {}),
+          ...(network === "grpc" ? { grpcServiceName: json.path ?? json.serviceName ?? "" } : {}),
           tls: json.tls === "tls" ? "true" : "false",
           sni: json.sni ?? json.host ?? "",
         },
@@ -75,6 +82,8 @@ function parseProxyUrl(raw: string): ParsedProxy | null {
     if (url.startsWith("vless://")) {
       const u = new URL(url.replace("vless://", "http://"));
       const params = Object.fromEntries(u.searchParams.entries());
+      const security = params.security ?? ((params.tls === "tls" || params.sni || params.servername) ? "tls" : "none");
+      const network = params.type ?? "tcp";
       return {
         protocol: "VLESS",
         server: u.hostname,
@@ -83,9 +92,17 @@ function parseProxyUrl(raw: string): ParsedProxy | null {
         extra: {
           uuid: u.username,
           flow: params.flow ?? "",
-          network: params.type ?? "tcp",
-          tls: (params.security === "tls" || params.security === "reality") ? "true" : "false",
+          network,
+          ...(network === "ws" ? { wsPath: params.path ?? "/", wsHeaders: stringifyHostHeader(params.host) } : {}),
+          ...(network === "http" ? { httpPath: params.path ?? "/", httpHost: params.host ?? "" } : {}),
+          ...(network === "h2" ? { h2Path: params.path ?? "/", h2Host: params.host ?? "" } : {}),
+          ...(network === "grpc" ? { grpcServiceName: params.serviceName ?? "" } : {}),
+          security,
+          tls: (security === "tls" || security === "reality") ? "true" : "false",
           sni: params.sni ?? params.servername ?? "",
+          fingerprint: params.fp ?? "",
+          publicKey: params.pbk ?? params["public-key"] ?? "",
+          shortId: params.sid ?? params["short-id"] ?? "",
           skipCert: params.allowInsecure === "1" ? "true" : "false",
         },
       };
@@ -94,6 +111,7 @@ function parseProxyUrl(raw: string): ParsedProxy | null {
     if (url.startsWith("trojan://")) {
       const u = new URL(url.replace("trojan://", "http://"));
       const params = Object.fromEntries(u.searchParams.entries());
+      const network = params.type ?? "tcp";
       return {
         protocol: "Trojan",
         server: u.hostname,
@@ -101,7 +119,9 @@ function parseProxyUrl(raw: string): ParsedProxy | null {
         name: decodeURIComponent(u.hash.slice(1)),
         extra: {
           password: u.username,
-          network: params.type ?? "tcp",
+          network,
+          ...(network === "ws" ? { wsPath: params.path ?? "/", wsHeaders: stringifyHostHeader(params.host) } : {}),
+          ...(network === "grpc" ? { grpcServiceName: params.serviceName ?? "" } : {}),
           sni: params.sni ?? params.peer ?? "",
           skipCert: params.allowInsecure === "1" ? "true" : "false",
         },
@@ -186,9 +206,21 @@ const PROTOCOL_GROUPS_DATA: { key: "groupClassic" | "groupEncrypted" | "groupMod
 
 const SS_CIPHERS = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm"];
 const VMESS_CIPHERS = ["auto", "aes-128-gcm", "chacha20-poly1305", "none"];
-const NETWORKS = ["tcp", "ws", "h2", "grpc"];
+const NETWORKS_BY_PROTOCOL = {
+  VMess: ["tcp", "ws", "http", "h2", "grpc"],
+  VLESS: ["tcp", "ws", "http", "h2", "grpc"],
+  Trojan: ["tcp", "ws", "grpc"],
+} as const;
 const CONGESTION = ["cubic", "bbr", "new_reno"];
 const UDP_RELAY_MODES = ["native", "quic"];
+
+function getSupportedNetworks(protocol: keyof typeof NETWORKS_BY_PROTOCOL, value?: string) {
+  const networks = [...NETWORKS_BY_PROTOCOL[protocol]] as string[];
+  return {
+    networks,
+    network: value && networks.includes(value) ? value : "tcp",
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -294,11 +326,46 @@ function SSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }
   );
 }
 
+function TransportFields({ network, iv = {}, onChange }: { network: string; iv?: IV; onChange?: (v: IV) => void }) {
+  const { t } = useLocale();
+  const pT = t.proxyNode;
+
+  switch (network) {
+    case "ws":
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={pT.wsPath}><Input value={iv.wsPath ?? "/"} onChange={(e) => onChange?.({ ...iv, wsPath: e.target.value })} placeholder="/" className="font-mono" /></Field>
+          <Field label={pT.wsHeaders}><Input value={iv.wsHeaders ?? ""} onChange={(e) => onChange?.({ ...iv, wsHeaders: e.target.value })} placeholder='{"Host":"example.com"}' className="font-mono text-xs" /></Field>
+        </div>
+      );
+    case "http":
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={pT.httpPath}><Input value={iv.httpPath ?? "/"} onChange={(e) => onChange?.({ ...iv, httpPath: e.target.value })} placeholder="/,/video" className="font-mono" /></Field>
+          <Field label={pT.httpHost}><Input value={iv.httpHost ?? ""} onChange={(e) => onChange?.({ ...iv, httpHost: e.target.value })} placeholder="example.com,cdn.example.com" className="font-mono text-xs" /></Field>
+        </div>
+      );
+    case "h2":
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={pT.h2Path}><Input value={iv.h2Path ?? "/"} onChange={(e) => onChange?.({ ...iv, h2Path: e.target.value })} placeholder="/" className="font-mono" /></Field>
+          <Field label={pT.h2Host}><Input value={iv.h2Host ?? ""} onChange={(e) => onChange?.({ ...iv, h2Host: e.target.value })} placeholder="example.com,cdn.example.com" className="font-mono text-xs" /></Field>
+        </div>
+      );
+    case "grpc":
+      return (
+        <Field label={pT.grpcServiceName}><Input value={iv.grpcServiceName ?? ""} onChange={(e) => onChange?.({ ...iv, grpcServiceName: e.target.value })} placeholder="grpc" className="font-mono" /></Field>
+      );
+    default:
+      return null;
+  }
+}
+
 function VMessFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
   const cipher = iv.cipher && VMESS_CIPHERS.includes(iv.cipher) ? iv.cipher : "auto";
-  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
+  const { network, networks } = getSupportedNetworks("VMess", iv.network);
   const tls = iv.tls === "true";
   return (
     <>
@@ -316,7 +383,7 @@ function VMessFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => voi
         <Field label={pT.network}>
           <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+            <SelectContent>{networks.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         <Field label="TLS">
@@ -326,12 +393,7 @@ function VMessFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => voi
           </div>
         </Field>
       </div>
-      {network === "ws" && (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={pT.wsPath}><Input value={iv.wsPath ?? "/"} onChange={(e) => onChange?.({ ...iv, wsPath: e.target.value })} placeholder="/" className="font-mono" /></Field>
-          <Field label={pT.wsHeaders}><Input value={iv.wsHeaders ?? ""} onChange={(e) => onChange?.({ ...iv, wsHeaders: e.target.value })} placeholder='{"Host":"example.com"}' className="font-mono text-xs" /></Field>
-        </div>
-      )}
+      <TransportFields network={network} iv={iv} onChange={onChange} />
       {tls && <TLSOptions iv={iv} onChange={onChange} />}
     </>
   );
@@ -341,8 +403,10 @@ function VLESSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => voi
   const { t } = useLocale();
   const pT = t.proxyNode;
   const flow = iv.flow || "__none__";
-  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
-  const tls = iv.tls === "true";
+  const { network, networks } = getSupportedNetworks("VLESS", iv.network);
+  const security = iv.security ?? (iv.tls === "true" ? "tls" : "none");
+  const tls = security !== "none";
+  const isReality = security === "reality";
   return (
     <>
       <Field label={pT.uuid}><Input value={iv.uuid ?? ""} onChange={(e) => onChange?.({ ...iv, uuid: e.target.value })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="font-mono text-xs" /></Field>
@@ -359,15 +423,40 @@ function VLESSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => voi
         <Field label={pT.network}>
           <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+            <SelectContent>{networks.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
       </div>
-      <label className="flex items-center justify-between cursor-pointer">
-        <span className="text-sm text-[var(--foreground)]">TLS</span>
-        <Switch checked={tls} onCheckedChange={(v) => onChange?.({ ...iv, tls: v ? "true" : "false" })} />
-      </label>
+      <Field label={pT.security}>
+        <Select
+          value={security}
+          onValueChange={(v) => onChange?.({ ...iv, security: v, tls: v === "none" ? "false" : "true" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{pT.securityNone}</SelectItem>
+            <SelectItem value="tls">{pT.securityTls}</SelectItem>
+            <SelectItem value="reality">{pT.securityReality}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <TransportFields network={network} iv={iv} onChange={onChange} />
       {tls && <TLSOptions iv={iv} onChange={onChange} />}
+      {isReality && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={pT.fingerprint}>
+            <Input value={iv.fingerprint ?? ""} onChange={(e) => onChange?.({ ...iv, fingerprint: e.target.value })} placeholder="chrome" className="font-mono" />
+          </Field>
+          <Field label={pT.shortId}>
+            <Input value={iv.shortId ?? ""} onChange={(e) => onChange?.({ ...iv, shortId: e.target.value })} placeholder="e.g. 7ebdd57b" className="font-mono" />
+          </Field>
+          <div className="col-span-2">
+            <Field label={pT.publicKey}>
+              <Input value={iv.publicKey ?? ""} onChange={(e) => onChange?.({ ...iv, publicKey: e.target.value })} placeholder="Base64 public key" className="font-mono text-xs" />
+            </Field>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -375,16 +464,17 @@ function VLESSFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => voi
 function TrojanFields({ iv = {}, onChange }: { iv?: IV; onChange?: (v: IV) => void }) {
   const { t } = useLocale();
   const pT = t.proxyNode;
-  const network = iv.network && NETWORKS.includes(iv.network) ? iv.network : "tcp";
+  const { network, networks } = getSupportedNetworks("Trojan", iv.network);
   return (
     <>
       <Field label={pT.password}><PasswordInput value={iv.password ?? ""} onChange={(v) => onChange?.({ ...iv, password: v })} /></Field>
       <Field label={pT.network}>
         <Select value={network} onValueChange={(v) => onChange?.({ ...iv, network: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>{NETWORKS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+          <SelectContent>{networks.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
+      <TransportFields network={network} iv={iv} onChange={onChange} />
       <TLSOptions iv={iv} onChange={onChange} />
     </>
   );
