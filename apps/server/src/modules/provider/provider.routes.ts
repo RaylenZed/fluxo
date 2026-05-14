@@ -2,10 +2,44 @@ import type { FastifyPluginAsync } from 'fastify';
 import { getDb } from '../../database/db';
 import { randomUUID } from 'crypto';
 import { HttpError, assertNonEmptyName, getHttpStatus } from '../policy/policy.validation';
+import axios from 'axios';
+import { parseSubscriptionContent } from '../profile/subscription-import.service';
 
 export const providerRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/providers', async () => {
     return getDb().prepare('SELECT * FROM providers ORDER BY name').all();
+  });
+
+  fastify.post('/providers/preview', async (req, reply) => {
+    try {
+      const body = req.body as { url?: string };
+      const url = assertNonEmptyName(body.url, 'Provider URL');
+      if (!/^https?:\/\//i.test(url)) {
+        throw new HttpError(400, 'Provider URL must start with http:// or https://');
+      }
+
+      const response = await axios.get<string>(url, {
+        responseType: 'text',
+        timeout: 20_000,
+        maxContentLength: 8 * 1024 * 1024,
+        transformResponse: (data) => data,
+        headers: {
+          'User-Agent': 'Fluxo/0.1.3',
+          Accept: 'text/plain, application/x-yaml, application/yaml, */*',
+        },
+      });
+      const content = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+      const result = parseSubscriptionContent(content);
+
+      return {
+        count: result.proxies.length,
+        skipped: result.skipped,
+        names: result.proxies.slice(0, 50).map((proxy) => proxy.name),
+      };
+    } catch (err) {
+      fastify.log.error(err);
+      reply.code(getHttpStatus(err)).send({ error: err instanceof Error ? err.message : 'Internal server error' });
+    }
   });
 
   fastify.post('/providers', async (req, reply) => {

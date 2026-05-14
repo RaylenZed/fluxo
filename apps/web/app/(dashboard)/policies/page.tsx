@@ -192,6 +192,8 @@ function GroupCard({
   const runtimeGroupChoices = getRuntimeGroupChoices(runtimeGroup);
   const runtimeGroupChoiceSet = new Set(runtimeGroupChoices);
   const runtimeSelectedProxy = typeof runtimeGroup?.now === "string" ? runtimeGroup.now : null;
+  const providerNames = parseGroupProviderNames(group);
+  const hasProviderMembers = providerNames.length > 0;
 
   const displayedNodes = (() => {
     const localNodes = getOrderedGroupProxyNames(group, proxyNodes)
@@ -216,11 +218,23 @@ function GroupCard({
       })
       .filter((node): node is { name: string; type: string; latency: number; loadedInRuntime: boolean } => node !== null);
 
-    if (parseGroupProviderNames(group).length === 0 || runtimeGroupChoices.length === 0) {
+    if (!hasProviderMembers) {
       return localNodes;
     }
 
     const displayedNames = new Set(localNodes.map((node) => node.name));
+    if (runtimeGroupChoices.length === 0) {
+      const providerPlaceholders = providerNames
+        .filter((name) => !displayedNames.has(name))
+        .map((name) => ({
+          name,
+          type: "provider",
+          latency: 0,
+          loadedInRuntime: false,
+        }));
+      return [...localNodes, ...providerPlaceholders];
+    }
+
     const providerNodes = runtimeGroupChoices
       .filter((name) => !displayedNames.has(name))
       .map((name) => ({

@@ -57,6 +57,7 @@ export function createGroup(data: {
     const uniqueProviders = uniqueStrings(providers);
 
     assertGroupMembersExist(null, proxies, uniqueProviders);
+    assertNoGroupCycle(db, id, [name], proxies);
     if (!data.use_all_proxies && proxies.length === 0 && uniqueProviders.length === 0) {
       throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
     }
@@ -151,6 +152,7 @@ export function updateGroup(
     nextProviders = uniqueStrings(nextProviders);
 
     assertGroupMembersExist(id, nextProxies, nextProviders);
+    assertNoGroupCycle(db, id, uniqueStrings([existing.name, nextName]), nextProxies);
     if (!nextUseAll && nextProxies.length === 0 && nextProviders.length === 0) {
       throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
     }
@@ -225,6 +227,33 @@ function uniqueProviderName(db: Database.Database, baseName: string): string {
 
 function uniqueStrings(values: string[]): string[] {
   return values.filter((value, index, array) => typeof value === 'string' && value.length > 0 && array.indexOf(value) === index);
+}
+
+function assertNoGroupCycle(db: Database.Database, groupId: string, targetNames: string[], memberNames: string[]) {
+  const targetNameSet = new Set(targetNames);
+  const groups = db.prepare('SELECT id, name, proxies FROM proxy_groups WHERE id != ?').all(groupId) as Array<{
+    id: string;
+    name: string;
+    proxies: string;
+  }>;
+  const groupMap = new Map(groups.map((group) => [group.name, group]));
+  const visited = new Set<string>();
+
+  const visitsTarget = (name: string): boolean => {
+    if (targetNameSet.has(name)) return true;
+    if (visited.has(name)) return false;
+    visited.add(name);
+
+    const group = groupMap.get(name);
+    if (!group) return false;
+
+    return parseNameList(group.proxies).some((childName) => visitsTarget(childName));
+  };
+
+  const cycleMember = memberNames.find((memberName) => visitsTarget(memberName));
+  if (cycleMember) {
+    throw new HttpError(400, `Policy group cycle detected through: ${cycleMember}`);
+  }
 }
 
 export function deleteGroup(id: string) {

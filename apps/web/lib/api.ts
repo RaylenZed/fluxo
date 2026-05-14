@@ -53,6 +53,12 @@ export interface ProviderRow {
   updated_at: string;
 }
 
+export interface ProviderPreviewResult {
+  count: number;
+  skipped: number;
+  names: string[];
+}
+
 export interface RuleRow {
   id: string;
   type: string;
@@ -120,6 +126,8 @@ export const groupsApi = {
 // --- Providers ---
 export const providersApi = {
   list: () => request<ProviderRow[]>('/api/providers'),
+  preview: (data: { url: string }) =>
+    request<ProviderPreviewResult>('/api/providers/preview', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // --- Rules ---

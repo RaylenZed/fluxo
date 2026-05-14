@@ -1,7 +1,7 @@
 {
   "name": "fluxo",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Modern web dashboard for Mihomo (Clash.Meta) — Let it flow.",
   "license": "MIT",
   "keywords": ["mihomo", "clash", "proxy", "dashboard", "fluxo"],

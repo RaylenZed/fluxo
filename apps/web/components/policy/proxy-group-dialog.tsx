@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, ExternalLink, Filter, Layers, Loader2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLocale } from "@/lib/i18n/context";
-import { proxiesApi, groupsApi, providersApi, type ProxyRow, type GroupRow } from "@/lib/api";
+import { proxiesApi, groupsApi, providersApi, type ProxyRow, type GroupRow, type ProviderPreviewResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface ProxyGroupDialogProps {
@@ -34,8 +34,9 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
   const [selected, setSelected] = useState<string[]>(initSelected);
   const [externalProviderNames, setExternalProviderNames] = useState<string[]>(initProviders);
   const [useExternal, setUseExternal] = useState(initProviders.length > 0);
-  const [externalUrl, setExternalUrl] = useState("");
-  const [externalInterval, setExternalInterval] = useState("86400");
+  const [externalUrl, setExternalUrl] = useState<string | null>(null);
+  const [externalInterval, setExternalInterval] = useState<string | null>(null);
+  const [externalPreview, setExternalPreview] = useState<{ url: string; result: ProviderPreviewResult } | null>(null);
   const [useAllProxies, setUseAllProxies] = useState(Boolean(editGroup?.use_all_proxies));
   const [filterRegex, setFilterRegex] = useState(editGroup?.filter ?? "");
   const [url, setUrl] = useState(editGroup?.url ?? "https://www.google.com/generate_204");
@@ -69,13 +70,14 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
     () => providers.find((provider) => externalProviderNames.includes(provider.name)),
     [externalProviderNames, providers]
   );
+  const effectiveExternalUrl = externalUrl ?? firstExternalProvider?.url ?? "";
+  const effectiveExternalInterval = externalInterval ?? String(firstExternalProvider?.interval ?? 86400);
+  const visibleExternalPreview = externalPreview?.url === effectiveExternalUrl.trim() ? externalPreview.result : null;
 
-  useEffect(() => {
-    if (!open || !firstExternalProvider || externalUrl.trim()) return;
-    setUseExternal(true);
-    setExternalUrl(firstExternalProvider.url);
-    setExternalInterval(String(firstExternalProvider.interval ?? 86400));
-  }, [externalUrl, firstExternalProvider, open]);
+  const previewExternal = useMutation({
+    mutationFn: (url: string) => providersApi.preview({ url }),
+    onSuccess: (result, previewUrl) => setExternalPreview({ url: previewUrl.trim(), result }),
+  });
 
   const isLoading = loadingProxies || loadingGroups || loadingProviders;
 
@@ -200,12 +202,53 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                 <div className="space-y-3 pl-1">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-[var(--muted)]">{gT.subscriptionUrl}</label>
-                    <Input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://example.com/sub.yaml" />
+                    <div className="flex gap-2">
+                      <Input
+                        value={effectiveExternalUrl}
+                        onChange={(e) => setExternalUrl(e.target.value)}
+                        placeholder="https://example.com/sub.yaml"
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => previewExternal.mutate(effectiveExternalUrl.trim())}
+                        disabled={!effectiveExternalUrl.trim() || previewExternal.isPending}
+                        className="shrink-0"
+                      >
+                        {previewExternal.isPending ? gT.previewingExternal : gT.previewExternal}
+                      </Button>
+                    </div>
+                    {previewExternal.isError && (
+                      <p className="text-xs text-red-500">{gT.externalPreviewFailed}</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-[var(--muted)]">{gT.autoUpdateInterval}</label>
-                    <Input type="number" value={externalInterval} onChange={(e) => setExternalInterval(e.target.value)} />
+                    <Input type="number" value={effectiveExternalInterval} onChange={(e) => setExternalInterval(e.target.value)} />
                   </div>
+                  {visibleExternalPreview && (
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                      <p className="text-xs font-semibold text-[var(--foreground)]">
+                        {gT.externalPreviewReady.replace("{count}", String(visibleExternalPreview.count))}
+                      </p>
+                      {visibleExternalPreview.skipped > 0 && (
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          {gT.externalPreviewSkipped.replace("{count}", String(visibleExternalPreview.skipped))}
+                        </p>
+                      )}
+                      {visibleExternalPreview.names.length > 0 && (
+                        <div className="mt-2 max-h-28 overflow-y-auto rounded-[8px] bg-[var(--surface)] border border-[var(--border)]">
+                          {visibleExternalPreview.names.slice(0, 12).map((proxyName) => (
+                            <div key={proxyName} className="truncate px-2 py-1 text-xs text-[var(--foreground)]">
+                              {proxyName}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -273,6 +316,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
           <Button variant="secondary" onClick={onClose}>{gT.cancel}</Button>
           <Button
             onClick={() => {
+              const providerUrl = effectiveExternalUrl.trim();
               const providerNames = useExternal
                 ? (firstExternalProvider ? [firstExternalProvider.name] : externalProviderNames)
                 : [];
@@ -283,8 +327,8 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                 proxies: selected,
                 providers: providerNames,
                 externalProvider: useExternal ? {
-                  url: externalUrl.trim(),
-                  interval: parseInt(externalInterval, 10),
+                  url: providerUrl,
+                  interval: parseInt(effectiveExternalInterval, 10),
                 } : null,
                 filter: filterRegex,
                 url,
@@ -294,7 +338,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                 use_all_proxies: useAllProxies ? 1 : 0,
               });
             }}
-            disabled={!name.trim() || (useExternal && !externalUrl.trim())}
+            disabled={!name.trim() || (useExternal && !effectiveExternalUrl.trim())}
           >
             {groupName ? gT.saveChanges : gT.createGroup}
           </Button>
