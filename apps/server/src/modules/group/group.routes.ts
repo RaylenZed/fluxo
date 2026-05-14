@@ -31,6 +31,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
         type: string;
         proxies: string[];
         providers?: string[];
+        externalProvider?: { url?: string; interval?: number } | null;
         url?: string;
         interval?: number;
         tolerance?: number;
@@ -54,6 +55,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify) => {
         type: string;
         proxies: string[];
         providers: string[];
+        externalProvider: { url?: string; interval?: number } | null;
         url: string;
         interval: number;
         tolerance: number;

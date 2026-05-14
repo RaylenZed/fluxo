@@ -1,5 +1,6 @@
 import { getDb } from '../../database/db';
 import { randomUUID } from 'crypto';
+import type Database from 'better-sqlite3';
 import {
   HttpError,
   assertGroupMembersExist,
@@ -7,6 +8,11 @@ import {
   assertValidGroupType,
   parseNameList,
 } from '../policy/policy.validation';
+
+type ExternalProviderInput = {
+  url?: string;
+  interval?: number;
+} | null;
 
 export function getAllGroups() {
   return getDb().prepare('SELECT * FROM proxy_groups ORDER BY sort_order').all();
@@ -21,6 +27,7 @@ export function createGroup(data: {
   type: string;
   proxies: string[];
   providers?: string[];
+  externalProvider?: ExternalProviderInput;
   url?: string;
   interval?: number;
   tolerance?: number;
@@ -31,12 +38,8 @@ export function createGroup(data: {
   const name = assertNonEmptyName(data.name, 'Group name');
   assertValidGroupType(data.type);
   const proxies = data.proxies ?? [];
-  const providers = data.providers ?? [];
-  assertGroupMembersExist(null, proxies, providers);
-
-  if (!data.use_all_proxies && proxies.length === 0 && providers.length === 0) {
-    throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
-  }
+  const baseProviders = data.providers ?? [];
+  const externalProvider = normalizeExternalProvider(data.externalProvider);
 
   const existing = getDb().prepare('SELECT 1 FROM proxy_groups WHERE name = ?').get(name);
   if (existing) {
@@ -45,26 +48,40 @@ export function createGroup(data: {
 
   const now = new Date().toISOString();
   const id = randomUUID();
-  getDb()
-    .prepare(
-      `INSERT INTO proxy_groups (id, name, type, proxies, providers, url, interval, tolerance, filter, use_all_proxies, strategy, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM proxy_groups), ?, ?)`
-    )
-    .run(
-      id,
-      name,
-      data.type,
-      JSON.stringify(proxies),
-      JSON.stringify(providers),
-      data.url ?? null,
-      data.interval ?? 300,
-      data.tolerance ?? 150,
-      data.filter ?? null,
-      data.use_all_proxies ? 1 : 0,
-      data.strategy ?? null,
-      now,
-      now
-    );
+  const db = getDb();
+  const transaction = db.transaction(() => {
+    const providers = [...baseProviders];
+    if (externalProvider) {
+      providers.push(upsertExternalProvider(db, name, externalProvider, null, now));
+    }
+    const uniqueProviders = uniqueStrings(providers);
+
+    assertGroupMembersExist(null, proxies, uniqueProviders);
+    if (!data.use_all_proxies && proxies.length === 0 && uniqueProviders.length === 0) {
+      throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
+    }
+
+    db.prepare(
+        `INSERT INTO proxy_groups (id, name, type, proxies, providers, url, interval, tolerance, filter, use_all_proxies, strategy, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM proxy_groups), ?, ?)`
+      )
+      .run(
+        id,
+        name,
+        data.type,
+        JSON.stringify(proxies),
+        JSON.stringify(uniqueProviders),
+        data.url ?? null,
+        data.interval ?? 300,
+        data.tolerance ?? 150,
+        data.filter ?? null,
+        data.use_all_proxies ? 1 : 0,
+        data.strategy ?? null,
+        now,
+        now
+      );
+  });
+  transaction();
   return { id };
 }
 
@@ -75,6 +92,7 @@ export function updateGroup(
     type: string;
     proxies: string[];
     providers: string[];
+    externalProvider: ExternalProviderInput;
     url: string;
     interval: number;
     tolerance: number;
@@ -101,12 +119,13 @@ export function updateGroup(
   }
 
   const nextProxies = data.proxies !== undefined ? data.proxies : parseNameList(existing.proxies);
-  const nextProviders = data.providers !== undefined ? data.providers : parseNameList(existing.providers);
-  const nextUseAll = data.use_all_proxies !== undefined ? data.use_all_proxies : Boolean(existing.use_all_proxies);
-  assertGroupMembersExist(id, nextProxies, nextProviders);
-  if (!nextUseAll && nextProxies.length === 0 && nextProviders.length === 0) {
-    throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
+  const existingProviders = parseNameList(existing.providers);
+  let nextProviders = data.providers !== undefined ? data.providers : existingProviders;
+  const externalProvider = data.externalProvider !== undefined ? normalizeExternalProvider(data.externalProvider) : undefined;
+  if (externalProvider === null && data.providers === undefined) {
+    nextProviders = [];
   }
+  const nextUseAll = data.use_all_proxies !== undefined ? data.use_all_proxies : Boolean(existing.use_all_proxies);
 
   const now = new Date().toISOString();
   const sets: string[] = ['updated_at = ?'];
@@ -114,7 +133,6 @@ export function updateGroup(
   if (data.name !== undefined) { sets.push('name = ?'); vals.push(nextName); }
   if (data.type !== undefined) { sets.push('type = ?'); vals.push(data.type); }
   if (data.proxies !== undefined) { sets.push('proxies = ?'); vals.push(JSON.stringify(data.proxies)); }
-  if (data.providers !== undefined) { sets.push('providers = ?'); vals.push(JSON.stringify(data.providers)); }
   if (data.url !== undefined) { sets.push('url = ?'); vals.push(data.url); }
   if (data.interval !== undefined) { sets.push('interval = ?'); vals.push(data.interval); }
   if (data.tolerance !== undefined) { sets.push('tolerance = ?'); vals.push(data.tolerance); }
@@ -124,6 +142,24 @@ export function updateGroup(
   vals.push(id);
 
   const update = db.transaction(() => {
+    if (externalProvider) {
+      nextProviders = [
+        ...nextProviders,
+        upsertExternalProvider(db, nextName, externalProvider, nextProviders[0] ?? existingProviders[0] ?? null, now),
+      ];
+    }
+    nextProviders = uniqueStrings(nextProviders);
+
+    assertGroupMembersExist(id, nextProxies, nextProviders);
+    if (!nextUseAll && nextProxies.length === 0 && nextProviders.length === 0) {
+      throw new HttpError(400, 'Policy group must include at least one proxy, provider, or all proxies');
+    }
+
+    if (data.providers !== undefined || data.externalProvider !== undefined) {
+      sets.push('providers = ?');
+      vals.splice(vals.length - 1, 0, JSON.stringify(nextProviders));
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     db.prepare(`UPDATE proxy_groups SET ${sets.join(', ')} WHERE id = ?`).run(...(vals as any[]));
 
@@ -132,6 +168,63 @@ export function updateGroup(
     }
   });
   update();
+}
+
+function normalizeExternalProvider(input: ExternalProviderInput | undefined): { url: string; interval: number } | null | undefined {
+  if (input === undefined) return undefined;
+  if (input === null) return null;
+
+  const url = assertNonEmptyName(input.url, 'Subscription URL');
+  if (!/^https?:\/\//i.test(url)) {
+    throw new HttpError(400, 'Subscription URL must start with http:// or https://');
+  }
+
+  const interval = Number.isFinite(input.interval) && Number(input.interval) > 0
+    ? Math.trunc(Number(input.interval))
+    : 86400;
+
+  return { url, interval };
+}
+
+function upsertExternalProvider(
+  db: Database.Database,
+  groupName: string,
+  provider: { url: string; interval: number },
+  preferredName: string | null,
+  now: string
+): string {
+  const preferred = preferredName ? preferredName.trim() : '';
+  if (preferred) {
+    const existing = db.prepare('SELECT name FROM providers WHERE name = ?').get(preferred);
+    if (existing) {
+      db.prepare('UPDATE providers SET url = ?, interval = ?, updated_at = ? WHERE name = ?')
+        .run(provider.url, provider.interval, now, preferred);
+      return preferred;
+    }
+  }
+
+  const name = uniqueProviderName(db, `${groupName} Subscription`);
+  db.prepare(
+      `INSERT INTO providers (id, name, url, interval, filter, health_check_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)`
+    )
+    .run(randomUUID(), name, provider.url, provider.interval, now, now);
+  return name;
+}
+
+function uniqueProviderName(db: Database.Database, baseName: string): string {
+  const base = assertNonEmptyName(baseName, 'Provider name');
+  let candidate = base;
+  let index = 2;
+  while (db.prepare('SELECT 1 FROM providers WHERE name = ?').get(candidate)) {
+    candidate = `${base} ${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return values.filter((value, index, array) => typeof value === 'string' && value.length > 0 && array.indexOf(value) === index);
 }
 
 export function deleteGroup(id: string) {

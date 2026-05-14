@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ExternalLink, Filter, Layers, Loader2 } from "lucide-react";
 import {
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLocale } from "@/lib/i18n/context";
-import { proxiesApi, groupsApi, type ProxyRow, type GroupRow } from "@/lib/api";
+import { proxiesApi, groupsApi, providersApi, type ProxyRow, type GroupRow } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface ProxyGroupDialogProps {
@@ -27,11 +27,13 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
   const gT = t.proxyGroup;
 
   const initSelected = (() => { try { return JSON.parse(editGroup?.proxies ?? "[]") as string[]; } catch { return []; } })();
+  const initProviders = (() => { try { return JSON.parse(editGroup?.providers ?? "[]") as string[]; } catch { return []; } })();
 
   const [name, setName] = useState(editGroup?.name ?? groupName ?? "");
   const [type, setType] = useState(editGroup?.type ?? "select");
   const [selected, setSelected] = useState<string[]>(initSelected);
-  const [useExternal, setUseExternal] = useState(false);
+  const [externalProviderNames, setExternalProviderNames] = useState<string[]>(initProviders);
+  const [useExternal, setUseExternal] = useState(initProviders.length > 0);
   const [externalUrl, setExternalUrl] = useState("");
   const [externalInterval, setExternalInterval] = useState("86400");
   const [useAllProxies, setUseAllProxies] = useState(Boolean(editGroup?.use_all_proxies));
@@ -56,7 +58,26 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
     staleTime: 30_000,
   });
 
-  const isLoading = loadingProxies || loadingGroups;
+  const { data: providers = [], isLoading: loadingProviders } = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => providersApi.list(),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const firstExternalProvider = useMemo(
+    () => providers.find((provider) => externalProviderNames.includes(provider.name)),
+    [externalProviderNames, providers]
+  );
+
+  useEffect(() => {
+    if (!open || !firstExternalProvider || externalUrl.trim()) return;
+    setUseExternal(true);
+    setExternalUrl(firstExternalProvider.url);
+    setExternalInterval(String(firstExternalProvider.interval ?? 86400));
+  }, [externalUrl, firstExternalProvider, open]);
+
+  const isLoading = loadingProxies || loadingGroups || loadingProviders;
 
   // Build member list: DIRECT, REJECT + real proxies + other groups (excluding current)
   const builtins = [
@@ -250,7 +271,31 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
 
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>{gT.cancel}</Button>
-          <Button onClick={() => { onSave?.({ name: name.trim(), type, proxies: selected, filter: filterRegex, url, interval: parseInt(interval, 10), tolerance: parseInt(tolerance, 10), strategy, use_all_proxies: useAllProxies ? 1 : 0 }); }} disabled={!name.trim()}>
+          <Button
+            onClick={() => {
+              const providerNames = useExternal
+                ? (firstExternalProvider ? [firstExternalProvider.name] : externalProviderNames)
+                : [];
+              setExternalProviderNames(providerNames);
+              onSave?.({
+                name: name.trim(),
+                type,
+                proxies: selected,
+                providers: providerNames,
+                externalProvider: useExternal ? {
+                  url: externalUrl.trim(),
+                  interval: parseInt(externalInterval, 10),
+                } : null,
+                filter: filterRegex,
+                url,
+                interval: parseInt(interval, 10),
+                tolerance: parseInt(tolerance, 10),
+                strategy,
+                use_all_proxies: useAllProxies ? 1 : 0,
+              });
+            }}
+            disabled={!name.trim() || (useExternal && !externalUrl.trim())}
+          >
             {groupName ? gT.saveChanges : gT.createGroup}
           </Button>
         </DialogFooter>

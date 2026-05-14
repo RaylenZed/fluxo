@@ -503,6 +503,9 @@ install_fluxo() {
     pnpm config set registry "$NPM_REGISTRY" --location project
   fi
   pnpm install --frozen-lockfile 2>&1 | tail -5 | while read -r line; do log_detail "$line"; done
+  log_detail "Verifying server runtime dependencies..."
+  node -e "require.resolve('axios', { paths: ['${INSTALL_DIR}/apps/server'] }); require.resolve('better-sqlite3', { paths: ['${INSTALL_DIR}/apps/server'] });" \
+    || die "Server dependencies are incomplete — try rerunning with NPM_REGISTRY=https://registry.npmmirror.com"
 
   log_detail "Building applications..."
   pnpm turbo build 2>&1 | grep -E "✓|error|warn" | head -20 | while read -r line; do log_detail "$line"; done

@@ -63,6 +63,15 @@ function parseGroupProxyNames(group: GroupRow): string[] {
   }
 }
 
+function parseGroupProviderNames(group: GroupRow): string[] {
+  try {
+    const parsed = JSON.parse(group.providers ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function getOrderedGroupProxyNames(group: GroupRow, proxyNodes: ProxyRow[]): string[] {
   const orderedNames = [...parseGroupProxyNames(group)];
 
@@ -85,6 +94,11 @@ function groupChoicesMatch(group: GroupRow, proxyNodes: ProxyRow[], runtimeGroup
 
   const expectedChoices = getOrderedGroupProxyNames(group, proxyNodes);
   const runtimeChoices = getRuntimeGroupChoices(runtimeGroup);
+  const hasProviderMembers = parseGroupProviderNames(group).length > 0;
+  if (hasProviderMembers) {
+    return runtimeChoices.length > 0 && expectedChoices.every((proxyName) => runtimeChoices.includes(proxyName));
+  }
+
   const expectedChoiceSet = new Set(expectedChoices);
 
   return runtimeChoices.length === expectedChoices.length
@@ -180,7 +194,7 @@ function GroupCard({
   const runtimeSelectedProxy = typeof runtimeGroup?.now === "string" ? runtimeGroup.now : null;
 
   const displayedNodes = (() => {
-    return getOrderedGroupProxyNames(group, proxyNodes)
+    const localNodes = getOrderedGroupProxyNames(group, proxyNodes)
       .map((name) => {
         const loadedInRuntime = runtimeLoadedNames
           ? Boolean(runtimeGroup) && runtimeLoadedNames.has(name) && (runtimeGroupChoiceSet.size === 0 || runtimeGroupChoiceSet.has(name))
@@ -201,6 +215,22 @@ function GroupCard({
         };
       })
       .filter((node): node is { name: string; type: string; latency: number; loadedInRuntime: boolean } => node !== null);
+
+    if (parseGroupProviderNames(group).length === 0 || runtimeGroupChoices.length === 0) {
+      return localNodes;
+    }
+
+    const displayedNames = new Set(localNodes.map((node) => node.name));
+    const providerNodes = runtimeGroupChoices
+      .filter((name) => !displayedNames.has(name))
+      .map((name) => ({
+        name,
+        type: runtimeProxyMap?.[name]?.type ?? "provider",
+        latency: 0,
+        loadedInRuntime: true,
+      }));
+
+    return [...localNodes, ...providerNodes];
   })();
 
   const fallbackSelectedProxy = displayedNodes.find((node) => node.loadedInRuntime)?.name

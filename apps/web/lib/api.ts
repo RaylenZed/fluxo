@@ -41,6 +41,18 @@ export interface GroupRow {
   sort_order: number;
 }
 
+export interface ProviderRow {
+  id: string;
+  name: string;
+  url: string;
+  interval: number;
+  filter: string | null;
+  health_check_url: string | null;
+  last_updated: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RuleRow {
   id: string;
   type: string;
@@ -103,6 +115,11 @@ export const groupsApi = {
     request<{ ok: boolean }>(`/api/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     request<{ ok: boolean }>(`/api/groups/${id}`, { method: 'DELETE' }),
+};
+
+// --- Providers ---
+export const providersApi = {
+  list: () => request<ProviderRow[]>('/api/providers'),
 };
 
 // --- Rules ---

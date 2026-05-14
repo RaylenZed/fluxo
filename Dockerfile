@@ -62,6 +62,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static      ./apps
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public            ./apps/web/public
 
 # ── Fastify API server ───────────────────────────────────────────────────────
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules                ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/dist           ./apps/server/dist
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/node_modules   ./apps/server/node_modules
 

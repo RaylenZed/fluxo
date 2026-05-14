@@ -57,7 +57,11 @@ export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: groupsApi.create,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups'] }); toast.success('Policy group created'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['providers'] });
+      toast.success('Policy group created');
+    },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 }
@@ -66,7 +70,11 @@ export function useUpdateGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => groupsApi.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups'] }); toast.success('Policy group updated'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['providers'] });
+      toast.success('Policy group updated');
+    },
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 }
