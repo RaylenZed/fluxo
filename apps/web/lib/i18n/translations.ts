@@ -638,6 +638,10 @@ const translations = {
       cancel: 'Cancel',
       loadingProxies: 'Loading nodes...',
       noProxies: 'No nodes yet',
+      loadGroupNodes: 'Load nodes',
+      loadingGroupNodes: 'Loading...',
+      providerNode: 'node',
+      noProviderNodes: 'No nodes matched',
     },
     // ── Config editor page ────────────────────────────────────────────────────
     configEditor: {
@@ -1298,6 +1302,10 @@ const translations = {
       cancel: '取消',
       loadingProxies: '加载节点中...',
       noProxies: '暂无节点',
+      loadGroupNodes: '加载节点',
+      loadingGroupNodes: '加载中...',
+      providerNode: '节点',
+      noProviderNodes: '没有匹配的节点',
     },
     // ── 配置编辑器页面 ────────────────────────────────────────────────────────
     configEditor: {

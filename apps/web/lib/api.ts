@@ -126,7 +126,7 @@ export const groupsApi = {
 // --- Providers ---
 export const providersApi = {
   list: () => request<ProviderRow[]>('/api/providers'),
-  preview: (data: { url: string }) =>
+  preview: (data: { url: string; limit?: number }) =>
     request<ProviderPreviewResult>('/api/providers/preview', { method: 'POST', body: JSON.stringify(data) }),
 };
 

@@ -12,11 +12,14 @@ export const providerRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/providers/preview', async (req, reply) => {
     try {
-      const body = req.body as { url?: string };
+      const body = req.body as { url?: string; limit?: number };
       const url = assertNonEmptyName(body.url, 'Provider URL');
       if (!/^https?:\/\//i.test(url)) {
         throw new HttpError(400, 'Provider URL must start with http:// or https://');
       }
+      const limit = Number.isFinite(body.limit) && Number(body.limit) > 0
+        ? Math.min(500, Math.trunc(Number(body.limit)))
+        : 50;
 
       const response = await axios.get<string>(url, {
         responseType: 'text',
@@ -34,7 +37,7 @@ export const providerRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         count: result.proxies.length,
         skipped: result.skipped,
-        names: result.proxies.slice(0, 50).map((proxy) => proxy.name),
+        names: result.proxies.slice(0, limit).map((proxy) => proxy.name),
       };
     } catch (err) {
       fastify.log.error(err);

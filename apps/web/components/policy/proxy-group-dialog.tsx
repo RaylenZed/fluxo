@@ -14,12 +14,61 @@ import { useLocale } from "@/lib/i18n/context";
 import { proxiesApi, groupsApi, providersApi, type ProxyRow, type GroupRow, type ProviderPreviewResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+type MemberItem = {
+  name: string;
+  type: string;
+  kind: "builtin" | "proxy" | "group";
+};
+
+type GroupProviderNodePreview = {
+  providerName: string;
+  names: string[];
+  count: number;
+  skipped: number;
+};
+
 interface ProxyGroupDialogProps {
   open: boolean;
   onClose: () => void;
   onSave?: (data: Record<string, unknown>) => void;
   groupName?: string;
   editGroup?: GroupRow;
+}
+
+const PROVIDER_NODE_PREVIEW_LIMIT = 300;
+
+function parseStringList(value?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return values.filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildExactNameFilter(names: string[]) {
+  const uniqueNames = uniqueStrings(names);
+  if (uniqueNames.length === 0) return "";
+  return `^(?:${uniqueNames.map(escapeRegex).join("|")})$`;
+}
+
+function applyGroupFilter(names: string[], filter?: string | null) {
+  const trimmed = filter?.trim();
+  if (!trimmed) return names;
+  try {
+    const pattern = new RegExp(trimmed);
+    return names.filter((name) => pattern.test(name));
+  } catch {
+    return names;
+  }
 }
 
 export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }: ProxyGroupDialogProps) {
@@ -37,6 +86,8 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
   const [externalInterval, setExternalInterval] = useState<string | null>(null);
   const [externalPreview, setExternalPreview] = useState<{ url: string; result: ProviderPreviewResult } | null>(null);
+  const [groupNodePreviews, setGroupNodePreviews] = useState<Record<string, GroupProviderNodePreview[]>>({});
+  const [selectedProviderNodes, setSelectedProviderNodes] = useState<Record<string, string[]>>({});
   const [useAllProxies, setUseAllProxies] = useState(Boolean(editGroup?.use_all_proxies));
   const [filterRegex, setFilterRegex] = useState(editGroup?.filter ?? "");
   const [url, setUrl] = useState(editGroup?.url ?? "https://www.google.com/generate_204");
@@ -73,23 +124,50 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
   const effectiveExternalUrl = externalUrl ?? firstExternalProvider?.url ?? "";
   const effectiveExternalInterval = externalInterval ?? String(firstExternalProvider?.interval ?? 86400);
   const visibleExternalPreview = externalPreview?.url === effectiveExternalUrl.trim() ? externalPreview.result : null;
+  const providerByName = useMemo(() => new Map(providers.map((provider) => [provider.name, provider])), [providers]);
+  const groupByName = useMemo(() => new Map(groups.map((group) => [group.name, group])), [groups]);
 
   const previewExternal = useMutation({
     mutationFn: (url: string) => providersApi.preview({ url }),
     onSuccess: (result, previewUrl) => setExternalPreview({ url: previewUrl.trim(), result }),
   });
 
+  const loadGroupNodes = useMutation({
+    mutationFn: async (group: GroupRow) => {
+      const providerNames = parseStringList(group.providers);
+      const previews = await Promise.all(providerNames.map(async (providerName) => {
+        const provider = providerByName.get(providerName);
+        if (!provider) return null;
+        const result = await providersApi.preview({ url: provider.url, limit: PROVIDER_NODE_PREVIEW_LIMIT });
+        return {
+          providerName,
+          names: applyGroupFilter(result.names, group.filter),
+          count: result.count,
+          skipped: result.skipped,
+        };
+      }));
+
+      return {
+        groupName: group.name,
+        providers: previews.filter((preview): preview is GroupProviderNodePreview => preview !== null),
+      };
+    },
+    onSuccess: ({ groupName: loadedGroupName, providers: previewProviders }) => {
+      setGroupNodePreviews((prev) => ({ ...prev, [loadedGroupName]: previewProviders }));
+    },
+  });
+
   const isLoading = loadingProxies || loadingGroups || loadingProviders;
 
   // Build member list: DIRECT, REJECT + real proxies + other groups (excluding current)
-  const builtins = [
-    { name: "DIRECT", type: "builtin" },
-    { name: "REJECT", type: "builtin" },
+  const builtins: MemberItem[] = [
+    { name: "DIRECT", type: "builtin", kind: "builtin" },
+    { name: "REJECT", type: "builtin", kind: "builtin" },
   ];
-  const proxyMembers = proxies.map((p: ProxyRow) => ({ name: p.name, type: p.type }));
+  const proxyMembers: MemberItem[] = proxies.map((p: ProxyRow) => ({ name: p.name, type: p.type, kind: "proxy" }));
   const groupMembers = groups
     .filter((g: GroupRow) => g.name !== groupName)
-    .map((g: GroupRow) => ({ name: g.name, type: "group" }));
+    .map((g: GroupRow) => ({ name: g.name, type: "group", kind: "group" as const }));
 
   const allMembers = [...builtins, ...proxyMembers, ...groupMembers];
 
@@ -98,6 +176,92 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
       prev.includes(proxyName) ? prev.filter((p) => p !== proxyName) : [...prev, proxyName]
     );
   };
+
+  const toggleProviderNode = (providerName: string, nodeName: string, parentGroupName: string) => {
+    setSelected((prev) => prev.filter((name) => name !== parentGroupName));
+    setSelectedProviderNodes((prev) => {
+      const current = prev[providerName] ?? [];
+      const next = current.includes(nodeName)
+        ? current.filter((name) => name !== nodeName)
+        : [...current, nodeName];
+      return { ...prev, [providerName]: next };
+    });
+  };
+
+  const renderMemberRows = (members: MemberItem[], showNoProxiesMessage = false) => (
+    <div className="space-y-1 max-h-[240px] overflow-y-auto pr-1">
+      {members.map((proxy) => {
+        const group = proxy.kind === "group" ? groupByName.get(proxy.name) : undefined;
+        const groupProviders = group ? parseStringList(group.providers) : [];
+        const canLoadGroupNodes = Boolean(group && groupProviders.length > 0);
+        const groupPreview = group ? groupNodePreviews[group.name] : undefined;
+        const isLoadingGroupNodes = Boolean(loadGroupNodes.isPending && loadGroupNodes.variables?.name === group?.name);
+
+        return (
+          <div key={proxy.name}>
+            <button
+              onClick={() => toggleProxy(proxy.name)}
+              className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
+                selected.includes(proxy.name) ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
+              )}
+            >
+              <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
+                selected.includes(proxy.name) ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
+              )}>
+                {selected.includes(proxy.name) && <Check className="h-2.5 w-2.5 text-white" />}
+              </div>
+              <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{proxy.type}</span>
+              <span className="flex-1 text-left font-medium text-[var(--foreground)]">{proxy.name}</span>
+            </button>
+
+            {canLoadGroupNodes && (
+              <div className="ml-10 mt-1 space-y-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => group && loadGroupNodes.mutate(group)}
+                  disabled={isLoadingGroupNodes}
+                  className="h-7 px-2 text-xs text-[var(--muted)]"
+                >
+                  {isLoadingGroupNodes ? gT.loadingGroupNodes : gT.loadGroupNodes}
+                </Button>
+
+                {groupPreview?.map((providerPreview) => (
+                  <div key={providerPreview.providerName} className="space-y-1 border-l border-[var(--border)] pl-3">
+                    {providerPreview.names.length === 0 ? (
+                      <p className="py-1 text-xs text-[var(--muted)]">{gT.noProviderNodes}</p>
+                    ) : providerPreview.names.map((nodeName) => {
+                      const isSelected = selectedProviderNodes[providerPreview.providerName]?.includes(nodeName) ?? false;
+                      return (
+                        <button
+                          key={`${providerPreview.providerName}:${nodeName}`}
+                          type="button"
+                          onClick={() => toggleProviderNode(providerPreview.providerName, nodeName, proxy.name)}
+                          className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
+                            isSelected ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
+                          )}
+                        >
+                          <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
+                            isSelected ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
+                          )}>
+                            {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                          </div>
+                          <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{gT.providerNode}</span>
+                          <span className="flex-1 truncate text-left font-medium text-[var(--foreground)]">{nodeName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {showNoProxiesMessage && <p className="text-xs text-[var(--muted)] text-center py-2">{gT.noProxies}</p>}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -152,40 +316,9 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                   <Loader2 className="h-4 w-4 animate-spin" />{gT.loadingProxies}
                 </div>
               ) : allMembers.length === 2 /* only builtins */ && proxies.length === 0 ? (
-                <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
-                  {builtins.map((proxy) => (
-                    <button key={proxy.name} onClick={() => toggleProxy(proxy.name)}
-                      className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
-                        selected.includes(proxy.name) ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
-                      )}>
-                      <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
-                        selected.includes(proxy.name) ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
-                      )}>
-                        {selected.includes(proxy.name) && <Check className="h-2.5 w-2.5 text-white" />}
-                      </div>
-                      <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{proxy.type}</span>
-                      <span className="flex-1 text-left font-medium text-[var(--foreground)]">{proxy.name}</span>
-                    </button>
-                  ))}
-                  <p className="text-xs text-[var(--muted)] text-center py-2">{gT.noProxies}</p>
-                </div>
+                renderMemberRows(builtins, true)
               ) : (
-                <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
-                  {allMembers.map((proxy) => (
-                    <button key={proxy.name} onClick={() => toggleProxy(proxy.name)}
-                      className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
-                        selected.includes(proxy.name) ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
-                      )}>
-                      <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
-                        selected.includes(proxy.name) ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
-                      )}>
-                        {selected.includes(proxy.name) && <Check className="h-2.5 w-2.5 text-white" />}
-                      </div>
-                      <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{proxy.type}</span>
-                      <span className="flex-1 text-left font-medium text-[var(--foreground)]">{proxy.name}</span>
-                    </button>
-                  ))}
-                </div>
+                renderMemberRows(allMembers)
               )}
             </TabsContent>
 
@@ -317,9 +450,17 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
           <Button
             onClick={() => {
               const providerUrl = effectiveExternalUrl.trim();
-              const providerNames = useExternal
+              const externalProviderNamesForSave = useExternal
                 ? (firstExternalProvider ? [firstExternalProvider.name] : externalProviderNames)
                 : [];
+              const selectedProviderNames = Object.entries(selectedProviderNodes)
+                .filter(([, nodeNames]) => nodeNames.length > 0)
+                .map(([providerName]) => providerName);
+              const selectedProviderNodeNames = Object.values(selectedProviderNodes).flat();
+              const providerNames = uniqueStrings([...externalProviderNamesForSave, ...selectedProviderNames]);
+              const nextFilter = selectedProviderNodeNames.length > 0
+                ? buildExactNameFilter(selectedProviderNodeNames)
+                : filterRegex;
               setExternalProviderNames(providerNames);
               onSave?.({
                 name: name.trim(),
@@ -330,7 +471,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                   url: providerUrl,
                   interval: parseInt(effectiveExternalInterval, 10),
                 } : null,
-                filter: filterRegex,
+                filter: nextFilter,
                 url,
                 interval: parseInt(interval, 10),
                 tolerance: parseInt(tolerance, 10),
