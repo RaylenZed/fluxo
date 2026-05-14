@@ -1,6 +1,6 @@
 "use client";
 import { useState, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, MoreHorizontal, Zap, ChevronDown, Clock, RotateCcw, Network, ServerCrash, Check, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
   useApplyConfig,
   useMihomoProxies,
 } from "@/lib/hooks";
-import { proxiesApi, type ProxyRow, type GroupRow, type MihomoProxyState } from "@/lib/api";
+import { proxiesApi, providersApi, type ProxyRow, type GroupRow, type ProviderRow, type MihomoProxyState } from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/lib/i18n/context";
 
@@ -36,6 +36,15 @@ const groupTypeIcons = {
 } as const;
 
 const BUILTIN_PROXY_NAMES = new Set(["DIRECT", "REJECT"]);
+const PROVIDER_NODE_PREVIEW_LIMIT = 300;
+
+type DisplayNode = {
+  name: string;
+  type: string;
+  latency: number;
+  loadedInRuntime: boolean;
+  pendingReason?: "apply" | "preview-loading" | "preview-error";
+};
 
 function isBuiltinProxy(name: string) {
   return BUILTIN_PROXY_NAMES.has(name);
@@ -69,6 +78,21 @@ function parseGroupProviderNames(group: GroupRow): string[] {
     return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
   } catch {
     return [];
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return values.filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+}
+
+function applyGroupFilter(names: string[], filter?: string | null) {
+  const trimmed = filter?.trim();
+  if (!trimmed) return names;
+  try {
+    const pattern = new RegExp(trimmed);
+    return names.filter((name) => pattern.test(name));
+  } catch {
+    return names;
   }
 }
 
@@ -109,6 +133,7 @@ function groupChoicesMatch(group: GroupRow, proxyNodes: ProxyRow[], runtimeGroup
 function GroupCard({
   group,
   proxyNodes,
+  providers,
   runtimeProxyMap,
   runtimeReady,
   onEdit,
@@ -117,6 +142,7 @@ function GroupCard({
 }: {
   group: GroupRow;
   proxyNodes: ProxyRow[];
+  providers: ProviderRow[];
   runtimeProxyMap: Record<string, MihomoProxyState> | null;
   runtimeReady: boolean;
   onEdit: () => void;
@@ -142,8 +168,30 @@ function GroupCard({
   const runtimeSelectedProxy = typeof runtimeGroup?.now === "string" ? runtimeGroup.now : null;
   const providerNames = parseGroupProviderNames(group);
   const hasProviderMembers = providerNames.length > 0;
+  const providerRows = providerNames
+    .map((name) => providers.find((provider) => provider.name === name))
+    .filter((provider): provider is ProviderRow => Boolean(provider));
+  const providerPreviewQuery = useQuery({
+    queryKey: [
+      "policy-group-provider-preview",
+      group.id,
+      group.filter ?? "",
+      providerRows.map((provider) => `${provider.name}:${provider.url}:${provider.filter ?? ""}`),
+    ],
+    queryFn: async () => {
+      return Promise.all(providerRows.map(async (provider) => {
+        const result = await providersApi.preview({ url: provider.url, limit: PROVIDER_NODE_PREVIEW_LIMIT });
+        const providerFilteredNames = applyGroupFilter(result.names, provider.filter);
+        return {
+          names: applyGroupFilter(providerFilteredNames, group.filter),
+        };
+      }));
+    },
+    enabled: hasProviderMembers && providerRows.length > 0 && runtimeGroupChoices.length === 0,
+    staleTime: 60_000,
+  });
 
-  const displayedNodes = (() => {
+  const displayedNodes: DisplayNode[] = (() => {
     const localNodes = getOrderedGroupProxyNames(group, proxyNodes)
       .map((name) => {
         const loadedInRuntime = runtimeLoadedNames
@@ -164,7 +212,7 @@ function GroupCard({
           loadedInRuntime,
         };
       })
-      .filter((node): node is { name: string; type: string; latency: number; loadedInRuntime: boolean } => node !== null);
+      .filter((node): node is DisplayNode => node !== null);
 
     if (!hasProviderMembers) {
       return localNodes;
@@ -172,6 +220,23 @@ function GroupCard({
 
     const displayedNames = new Set(localNodes.map((node) => node.name));
     if (runtimeGroupChoices.length === 0) {
+      const previewNames = uniqueStrings((providerPreviewQuery.data ?? []).flatMap((preview) => preview.names));
+      if (previewNames.length > 0) {
+        const providerPreviewNodes = previewNames
+          .filter((name) => !displayedNames.has(name))
+          .map((name) => ({
+            name,
+            type: "provider",
+            latency: 0,
+            loadedInRuntime: false,
+            pendingReason: "apply" as const,
+          }));
+        return [...localNodes, ...providerPreviewNodes];
+      }
+      if (providerPreviewQuery.isSuccess) {
+        return localNodes;
+      }
+
       const providerPlaceholders = providerNames
         .filter((name) => !displayedNames.has(name))
         .map((name) => ({
@@ -179,6 +244,11 @@ function GroupCard({
           type: "provider",
           latency: 0,
           loadedInRuntime: false,
+          pendingReason: providerPreviewQuery.isLoading
+            ? "preview-loading" as const
+            : providerPreviewQuery.isError
+              ? "preview-error" as const
+              : "apply" as const,
         }));
       return [...localNodes, ...providerPlaceholders];
     }
@@ -220,7 +290,8 @@ function GroupCard({
       : fallbackSelectedProxy;
 
   const selectedNode = proxyNodes.find((n) => n.name === selectedProxy);
-  const selectedLatency = selectedNode ? readProxyLatency(selectedNode.config) : 0;
+  const selectedDisplayedNode = displayedNodes.find((node) => node.name === selectedProxy);
+  const selectedLatency = selectedNode ? readProxyLatency(selectedNode.config) : (selectedDisplayedNode?.latency ?? 0);
 
   function canUseRuntimeNode(name: string) {
     if (!runtimeReady) return false;
@@ -344,7 +415,11 @@ function GroupCard({
                     </div>
                     {!node.loadedInRuntime ? (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                        {t.policies.pendingApply}
+                        {node.pendingReason === "preview-loading"
+                          ? t.common.loading
+                          : node.pendingReason === "preview-error"
+                            ? t.common.error
+                            : t.policies.pendingApply}
                       </span>
                     ) : node.latency > 0 ? (
                       <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", getLatencyBg(node.latency))}>
@@ -543,6 +618,11 @@ export default function PoliciesPage() {
 
   const proxiesQuery = useProxies();
   const groupsQuery = useGroups();
+  const providersQuery = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => providersApi.list(),
+    staleTime: 30_000,
+  });
   const createProxy = useCreateProxy();
   const deleteProxy = useDeleteProxy();
   const updateProxy = useUpdateProxy();
@@ -554,6 +634,7 @@ export default function PoliciesPage() {
 
   const proxyNodes = proxiesQuery.data ?? [];
   const proxyGroups = groupsQuery.data ?? [];
+  const providers = providersQuery.data ?? [];
   const runtimeProxyMap = runtimeProxiesQuery.data?.proxies ?? null;
   const runtimeReady = Boolean(runtimeProxyMap);
   const runtimeLoadedNames = runtimeProxyMap ? new Set(Object.keys(runtimeProxyMap)) : null;
@@ -734,6 +815,7 @@ export default function PoliciesPage() {
                   key={group.id}
                   group={group}
                   proxyNodes={proxyNodes}
+                  providers={providers}
                   runtimeProxyMap={runtimeProxyMap}
                   runtimeReady={runtimeReady}
                   onEdit={() => setEditingGroupId(group.id)}
