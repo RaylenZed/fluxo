@@ -150,6 +150,20 @@ gh_url() {
   echo "${GH_PROXY}${1}"
 }
 
+curl_download() {
+  local url="$1"
+  local dest="$2"
+  local attempt
+  for attempt in 1 2 3; do
+    if curl -fL --connect-timeout 20 --progress-bar -o "$dest" "$url"; then
+      return 0
+    fi
+    log_warn "Download failed (attempt ${attempt}/3): ${url}"
+    sleep 2
+  done
+  return 1
+}
+
 # ─── 0. ask_proxy ─────────────────────────────────────────────────────────────
 
 ask_proxy() {
@@ -301,7 +315,7 @@ download_mihomo_archive() {
   url="$(gh_url "${MIHOMO_GITHUB}/releases/download/${MIHOMO_VERSION}/${filename}")"
 
   log_detail "Downloading from: $url"
-  if ! curl -fSL --progress-bar -o "$dest" "$url"; then
+  if ! curl_download "$url" "$dest"; then
     die "Failed to download Mihomo. Check version and network connectivity."
   fi
 }
@@ -472,8 +486,11 @@ install_fluxo() {
 
   mkdir -p "$DATA_DIR"
 
+  local work_dir="$INSTALL_DIR"
+  local replacing_existing=false
+
   # Check if already installed
-  if [[ -d "$INSTALL_DIR" ]]; then
+  if [[ -d "$INSTALL_DIR" ]] && [[ -n "$(find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
     log_warn "Fluxo already installed at $INSTALL_DIR"
     # Auto-upgrade in pipe mode or when --upgrade flag is passed; prompt otherwise
     if $PIPE_MODE; then
@@ -482,28 +499,27 @@ install_fluxo() {
       log_info "Skipping Fluxo install"
       return 0
     fi
-    if want_fluxo; then
-      log_detail "Stopping Fluxo services before replacing files..."
-      systemctl stop fluxo-web.service fluxo.service 2>/dev/null || true
-    fi
-    log_detail "Removing existing installation..."
+    replacing_existing=true
+    work_dir="$(mktemp -d /tmp/fluxo-install-XXXXXX)"
+    log_detail "Preparing replacement in ${work_dir}"
+  else
     rm -rf "$INSTALL_DIR"
   fi
 
-  mkdir -p "$INSTALL_DIR"
+  mkdir -p "$work_dir"
 
   # Use tarball download when GH_PROXY is set (GitHub proxies usually don't support git protocol);
   # also fall back to tarball if git clone fails (common on CN servers with GitHub instability).
   local clone_ok=false
   if [[ -z "$GH_PROXY" ]] && command -v git &>/dev/null; then
     log_detail "Cloning repository..."
-    if git clone --depth=1 "${REPO_URL}" "$INSTALL_DIR" 2>&1; then
+    if git clone --depth=1 "${REPO_URL}" "$work_dir" 2>&1; then
       clone_ok=true
     else
       log_warn "git clone failed — falling back to tarball download"
       log_detail "Tip: set GH_PROXY=https://ghfast.top/ to speed up downloads in CN regions"
-      rm -rf "$INSTALL_DIR"
-      mkdir -p "$INSTALL_DIR"
+      rm -rf "$work_dir"
+      mkdir -p "$work_dir"
     fi
   fi
 
@@ -513,13 +529,21 @@ install_fluxo() {
     tarball_url="$(gh_url "${REPO_URL}/archive/refs/heads/main.tar.gz")"
     local tmptar
     tmptar="$(mktemp)"
-    curl -fSL --progress-bar -o "$tmptar" "$tarball_url" || die "Failed to download Fluxo — try setting GH_PROXY=https://ghfast.top/"
-    tar -xzf "$tmptar" --strip-components=1 -C "$INSTALL_DIR"
+    if ! curl_download "$tarball_url" "$tmptar"; then
+      if [[ -n "$GH_PROXY" ]]; then
+        log_warn "Download via GH_PROXY failed — retrying direct GitHub URL"
+        tarball_url="${REPO_URL}/archive/refs/heads/main.tar.gz"
+        curl_download "$tarball_url" "$tmptar" || die "Failed to download Fluxo — try another GH_PROXY or rerun later"
+      else
+        die "Failed to download Fluxo — try setting GH_PROXY=https://ghfast.top/"
+      fi
+    fi
+    tar -xzf "$tmptar" --strip-components=1 -C "$work_dir"
     rm -f "$tmptar"
   fi
 
   log_detail "Installing dependencies..."
-  cd "$INSTALL_DIR"
+  cd "$work_dir"
   # Allow overriding npm registry (useful for CN servers: NPM_REGISTRY=https://registry.npmmirror.com)
   if [[ -n "${NPM_REGISTRY:-}" ]]; then
     log_detail "Using npm registry: ${NPM_REGISTRY}"
@@ -527,7 +551,7 @@ install_fluxo() {
   fi
   pnpm install --frozen-lockfile 2>&1 | tail -5 | while read -r line; do log_detail "$line"; done
   log_detail "Verifying server runtime dependencies..."
-  node -e "require.resolve('axios', { paths: ['${INSTALL_DIR}/apps/server'] }); require.resolve('better-sqlite3', { paths: ['${INSTALL_DIR}/apps/server'] });" \
+  node -e "require.resolve('axios', { paths: ['${work_dir}/apps/server'] }); require.resolve('better-sqlite3', { paths: ['${work_dir}/apps/server'] });" \
     || die "Server dependencies are incomplete — try rerunning with NPM_REGISTRY=https://registry.npmmirror.com"
 
   log_detail "Building applications..."
@@ -545,20 +569,33 @@ install_fluxo() {
   log_info "Fluxo built successfully"
 
   # Copy static assets into Next.js standalone output (required for standalone mode)
-  local web_standalone="${INSTALL_DIR}/apps/web/.next/standalone/apps/web"
+  local web_standalone="${work_dir}/apps/web/.next/standalone/apps/web"
   log_detail "Copying static assets to standalone output..."
   rm -rf "${web_standalone}/public" "${web_standalone}/.next/static"
-  cp -r "${INSTALL_DIR}/apps/web/public" "${web_standalone}/public" 2>/dev/null || true
+  cp -r "${work_dir}/apps/web/public" "${web_standalone}/public" 2>/dev/null || true
   mkdir -p "${web_standalone}/.next"
-  cp -r "${INSTALL_DIR}/apps/web/.next/static" "${web_standalone}/.next/static" 2>/dev/null || true
+  cp -r "${work_dir}/apps/web/.next/static" "${web_standalone}/.next/static" 2>/dev/null || true
   [[ -f "${web_standalone}/server.js" ]] || die "Fluxo web standalone server is missing"
   [[ -d "${web_standalone}/.next/static/chunks" ]] || die "Fluxo web static chunks are missing"
 
   # Install fluxo-cli (system management CLI tool)
   log_detail "Installing fluxo-cli..."
-  cp "$INSTALL_DIR/tools/fluxo-cli.sh" /usr/local/bin/fluxo-cli
+  cp "$work_dir/tools/fluxo-cli.sh" /usr/local/bin/fluxo-cli
   chmod +x /usr/local/bin/fluxo-cli
   log_info "fluxo-cli installed → /usr/local/bin/fluxo-cli"
+
+  if $replacing_existing; then
+    if want_fluxo; then
+      log_detail "Stopping Fluxo services before replacing files..."
+      systemctl stop fluxo-web.service fluxo.service 2>/dev/null || true
+    fi
+    log_detail "Replacing existing installation..."
+    local backup_dir="${INSTALL_DIR}.previous"
+    rm -rf "$backup_dir"
+    mv "$INSTALL_DIR" "$backup_dir" 2>/dev/null || true
+    mv "$work_dir" "$INSTALL_DIR"
+    rm -rf "$backup_dir"
+  fi
 }
 
 install_fluxo_cli_only() {
@@ -566,7 +603,7 @@ install_fluxo_cli_only() {
 
   local cli_url
   cli_url="$(gh_url "${REPO_URL}/raw/main/tools/fluxo-cli.sh")"
-  if curl -fsSL "$cli_url" -o /usr/local/bin/fluxo-cli; then
+  if curl_download "$cli_url" /usr/local/bin/fluxo-cli; then
     chmod +x /usr/local/bin/fluxo-cli
     log_info "fluxo-cli installed → /usr/local/bin/fluxo-cli"
     return 0
