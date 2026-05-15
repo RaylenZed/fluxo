@@ -9,6 +9,8 @@ out/
 # Build outputs
 dist/
 build/
+apps/desktop/resources/
+apps/desktop/release/
 
 # Env files
 .env

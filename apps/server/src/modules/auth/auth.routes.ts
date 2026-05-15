@@ -2,6 +2,7 @@ import '@fastify/cookie';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   isSetupRequired,
+  isAuthDisabled,
   setPassword,
   verifyPassword,
   signToken,
@@ -19,6 +20,10 @@ const COOKIE_OPTS = {
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/auth/me — returns auth state (used by frontend to check session)
   fastify.get('/auth/me', async (req, reply) => {
+    if (isAuthDisabled()) {
+      return reply.send({ authenticated: true, setupRequired: false });
+    }
+
     const token = (req.cookies as Record<string, string>)[COOKIE_NAME];
     if (token && verifyToken(token)) {
       return reply.send({ authenticated: true, setupRequired: false });

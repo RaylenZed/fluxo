@@ -1,0 +1,76 @@
+{
+  "name": "@fluxo/desktop",
+  "version": "3.1.0",
+  "private": true,
+  "description": "Fluxo desktop workbench for generating Mihomo YAML configs.",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "pnpm build && FLUXO_DESKTOP_DEV=1 electron .",
+    "build": "tsc -p tsconfig.json",
+    "prepare:resources": "node ./scripts/prepare-resources.mjs",
+    "app:dir": "pnpm prepare:resources && pnpm build && electron-builder --dir",
+    "app:dist": "pnpm prepare:resources && pnpm build && electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "click.fluxo.desktop",
+    "productName": "Fluxo",
+    "copyright": "Copyright © 2026 Fluxo",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/web/node_modules",
+        "to": "web/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/server",
+        "to": "server",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/server/node_modules",
+        "to": "server/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
+    }
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/node": "^20",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3"
+  }
+}

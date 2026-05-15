@@ -10,6 +10,9 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "desktop:dev": "pnpm --filter @fluxo/desktop dev",
+    "desktop:pack": "pnpm --filter @fluxo/desktop run app:dir",
+    "desktop:dist": "pnpm --filter @fluxo/desktop run app:dist",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {

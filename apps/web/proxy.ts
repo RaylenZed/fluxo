@@ -6,6 +6,10 @@ const PUBLIC_PATHS = ['/login', '/setup'];
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  if (process.env.FLUXO_AUTH_DISABLED === '1') {
+    return NextResponse.next();
+  }
+
   // Allow public paths and Next.js internals through
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||

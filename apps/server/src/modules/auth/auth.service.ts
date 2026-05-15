@@ -24,6 +24,10 @@ export function isSetupRequired(): boolean {
   return !getSetting('auth.password_hash');
 }
 
+export function isAuthDisabled(): boolean {
+  return process.env.FLUXO_AUTH_DISABLED === '1';
+}
+
 export async function setPassword(plaintext: string): Promise<void> {
   const hash = await bcrypt.hash(plaintext, BCRYPT_ROUNDS);
   setSetting('auth.password_hash', hash);

@@ -7,7 +7,7 @@ import path from 'path';
 import { addClient, startMihomoRelay } from './modules/realtime/realtime.service';
 import { generateConfig } from './modules/config/config.generator';
 import { getDb } from './database/db';
-import { verifyToken, COOKIE_NAME } from './modules/auth/auth.service';
+import { verifyToken, COOKIE_NAME, isAuthDisabled } from './modules/auth/auth.service';
 
 for (const envFile of ['.env.local', '.env']) {
   const envPath = path.join(process.cwd(), envFile);
@@ -50,6 +50,7 @@ async function main() {
 
   // Global authentication preHandler — runs before every route handler
   app.addHook('preHandler', async (req, reply) => {
+    if (isAuthDisabled()) return;
     if (PUBLIC_ROUTES.has(req.url.split('?')[0])) return;
 
     const token = (req.cookies as Record<string, string>)[COOKIE_NAME]
@@ -89,6 +90,11 @@ async function main() {
 
   // WebSocket endpoint for real-time data
   app.get('/ws', { websocket: true }, (socket, req) => {
+    if (isAuthDisabled()) {
+      addClient(socket as unknown as import('ws'));
+      return;
+    }
+
     const token = (req.cookies as Record<string, string> | undefined)?.[COOKIE_NAME]
       ?? getTokenFromCookieHeader(req.headers.cookie)
       ?? getBearerToken(req.headers.authorization);
