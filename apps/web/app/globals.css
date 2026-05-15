@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  /* Brand purple */
-  --brand-50: #f5f3ff;
-  --brand-100: #ede9fe;
-  --brand-200: #ddd6fe;
-  --brand-300: #c4b5fd;
-  --brand-400: #a78bfa;
-  --brand-500: #7c5cfc;
-  --brand-600: #6d28d9;
-  --brand-700: #5b21b6;
+  /* macOS-style blue accent */
+  --brand-50: #eaf4ff;
+  --brand-100: #d7ebff;
+  --brand-200: #b6d9ff;
+  --brand-300: #82bdff;
+  --brand-400: #3d99ff;
+  --brand-500: #007aff;
+  --brand-600: #0067d8;
+  --brand-700: #0052ad;
 
   /* Layout colors */
-  --canvas: #d8dce8;
-  --background: #f0f2f8;
+  --canvas: #d2d9e3;
+  --background: #fbfbfd;
   --surface: #ffffff;
-  --surface-2: #f8f9fc;
-  --border: #e5e7ef;
-  --foreground: #0f1117;
-  --muted: #6b7280;
-  --muted-foreground: #9ca3af;
-  --sidebar: #ffffff;
-  --sidebar-border: #e5e7ef;
-  --sidebar-active: #f5f3ff;
-  --sidebar-hover: #f9fafb;
+  --surface-2: #f2f3f5;
+  --border: #dedfe4;
+  --foreground: #18191f;
+  --muted: #6f7480;
+  --muted-foreground: #a7abb3;
+  --sidebar: #eef7ff;
+  --sidebar-border: #d7e2ec;
+  --sidebar-active: rgba(34, 44, 58, 0.08);
+  --sidebar-hover: rgba(34, 44, 58, 0.055);
 }
 
 .dark {
@@ -83,7 +83,7 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

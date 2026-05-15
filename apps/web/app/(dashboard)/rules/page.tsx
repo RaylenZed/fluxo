@@ -144,9 +144,9 @@ function SortableRuleRow({
       ref={setNodeRef}
       style={style}
       onClick={() => onEdit(rule)}
-      className="group relative cursor-pointer hover:bg-[var(--surface-2)]/60"
+      className="group relative cursor-pointer hover:bg-[#f5f5f6] dark:hover:bg-[var(--surface-2)]/60"
     >
-      <td className="w-12 pl-3 pr-1 py-2.5">
+      <td className="w-12 py-3 pl-3 pr-1">
         <div className="flex items-center gap-1.5">
           <button
             {...attributes}
@@ -159,30 +159,30 @@ function SortableRuleRow({
           <span className="text-xs text-[var(--muted)] font-mono w-5 text-right">{index + 1}</span>
         </div>
       </td>
-      <td className="py-2.5 pr-3">
+      <td className="py-3 pr-3">
         <span className={cn("inline-flex items-center rounded-[6px] px-2 py-0.5 text-[11px] font-semibold font-mono whitespace-nowrap", getRuleTypeBadgeClass(rule.type))}>
           {rule.type}
         </span>
       </td>
-      <td className="py-2.5 pr-3 max-w-[200px]">
-        <span className="text-sm font-mono text-[var(--foreground)] truncate block">
+      <td className="max-w-[240px] py-3 pr-3">
+        <span className="block truncate font-mono text-[15px] text-[var(--foreground)]">
           {rule.value || <span className="text-[var(--muted)] italic">—</span>}
         </span>
       </td>
-      <td className="py-2.5 pr-3">
+      <td className="py-3 pr-3">
         <span className={cn("inline-flex items-center rounded-[6px] px-2 py-0.5 text-xs font-semibold whitespace-nowrap", getPolicyBadgeClass(rule.policy))}>
           {rule.policy}
         </span>
       </td>
-      <td className="py-2.5 pr-3 text-right">
+      <td className="py-3 pr-3 text-right">
         <span className="text-xs tabular-nums text-[var(--muted)]">
           {rule.matches.toLocaleString()}
         </span>
       </td>
-      <td className="py-2.5 pr-2 max-w-[140px]">
+      <td className="max-w-[180px] py-3 pr-2">
         <span className="text-xs text-[var(--muted)] truncate block">{rule.note}</span>
       </td>
-      <td className="py-2.5 pr-3 w-10">
+      <td className="w-10 py-3 pr-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -194,7 +194,7 @@ function SortableRuleRow({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent align="end" className="w-44 rounded-[14px] bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,32,48,0.22)] backdrop-blur dark:bg-[var(--surface)]">
             <DropdownMenuItem onClick={() => onEdit(rule)}>{t.rules.editRule}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDuplicate(rule)}>{t.rules.duplicate}</DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -290,17 +290,17 @@ function RuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>{editingRule ? rT.editRule : rT.newRule}</DialogTitle>
-          <DialogDescription>{rT.configureRule}</DialogDescription>
+      <DialogContent className="max-w-[720px] overflow-hidden rounded-[24px] bg-[#fbfbfd] shadow-[0_26px_90px_rgba(0,0,0,0.28)]">
+        <DialogHeader className="border-b border-[#e6e6e8] px-9 pb-5 pt-7">
+          <DialogTitle className="text-[30px] font-black tracking-[-0.02em]">{editingRule ? rT.editRule : rT.newRule}</DialogTitle>
+          <DialogDescription className="text-[17px] font-medium text-[var(--muted)]">{rT.configureRule}</DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 pb-2 space-y-4">
+        <div className="space-y-5 px-9 py-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[var(--muted)]">{rT.ruleType}</label>
+            <label className="text-[15px] font-bold text-[var(--muted)]">{rT.ruleType}</label>
             <Select value={type} onValueChange={(v) => setType(v as RuleType)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-[9px] bg-white text-[15px] font-semibold"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {RULE_TYPES.map((rt) => (
                   <SelectItem key={rt} value={rt}>{rt}</SelectItem>
@@ -311,7 +311,7 @@ function RuleDialog({
 
           {!isNoValue && (
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--muted)]">{rT.value}</label>
+              <label className="text-[15px] font-bold text-[var(--muted)]">{rT.value}</label>
               <Input
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
@@ -321,15 +321,15 @@ function RuleDialog({
                   : type === "PROCESS-NAME" ? "e.g. chrome"
                   : "e.g. api.openai.com"
                 }
-                className="font-mono"
+                className="h-11 bg-white font-mono text-[15px]"
               />
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[var(--muted)]">{rT.policyLabel}</label>
+            <label className="text-[15px] font-bold text-[var(--muted)]">{rT.policyLabel}</label>
             <Select value={policy} onValueChange={setPolicy}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-[9px] bg-white text-[15px] font-semibold"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {policies.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
@@ -339,15 +339,16 @@ function RuleDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[var(--muted)]">{rT.notes}</label>
+            <label className="text-[15px] font-bold text-[var(--muted)]">{rT.notes}</label>
             <Input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t.profiles.descriptionPlaceholder}
+              className="h-11 bg-white text-[15px]"
             />
           </div>
 
-          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] divide-y divide-[var(--border)]">
+          <div className="divide-y divide-[#e6e6e8] rounded-[10px] border border-[#e1e2e8] bg-white">
             <label className="flex items-center justify-between px-3 py-2.5 cursor-pointer">
               <span className="text-sm text-[var(--foreground)]">{rT.sendNotification}</span>
               <Switch checked={sendNotif} onCheckedChange={setSendNotif} />
@@ -365,7 +366,7 @@ function RuleDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-[#e6e6e8] bg-[#fbfbfd] px-9 py-5">
           <Button variant="secondary" onClick={onClose}>{rT.cancel}</Button>
           <Button onClick={handleSave} disabled={!isNoValue && !value.trim()}>
             {editingRule ? rT.saveChanges : rT.addRule}
@@ -767,13 +768,13 @@ export default function RulesPage() {
           <Globe className="h-3.5 w-3.5" />
           {rT.addRuleSet}
         </Button>
-        <Button size="sm" onClick={() => setShowAddRule(true)} className="gap-1.5">
+        <Button size="sm" onClick={() => { setEditingRule(undefined); setShowAddRule(true); }} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           {rT.addRule}
         </Button>
       </Topbar>
 
-      <div className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 overflow-auto px-8 py-7">
         {isError ? (
           <div className="flex flex-col items-center justify-center py-16 text-[var(--muted)]">
             <ServerCrash className="h-10 w-10 mb-3 opacity-40" />
@@ -783,24 +784,24 @@ export default function RulesPage() {
         ) : (
           <>
             {/* Filter bar */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="mb-5 flex items-center gap-3">
               <div className="relative flex-1 max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted)]" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={rT.searchRules}
-                  className="pl-8 h-8 text-xs"
+                  className="h-10 rounded-[10px] bg-white pl-9 text-[14px]"
                 />
               </div>
 
               <button
                 onClick={() => setGroupByPolicy(!groupByPolicy)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-[8px] px-3 h-8 text-xs font-semibold border transition-all",
+                  "flex h-10 items-center gap-1.5 rounded-[9px] border px-4 text-[13px] font-bold transition-all",
                   groupByPolicy
                     ? "bg-[var(--brand-500)] text-white border-[var(--brand-500)]"
-                    : "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)] hover:text-[var(--foreground)]"
+                    : "border-[var(--border)] bg-white text-[var(--muted)] hover:text-[var(--foreground)]"
                 )}
               >
                 {groupByPolicy ? <FolderOpen className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
@@ -813,27 +814,27 @@ export default function RulesPage() {
             </div>
 
             {/* Table */}
-            <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+            <div className="overflow-hidden rounded-[10px] border border-[#d7d7da] bg-white shadow-[0_10px_28px_rgba(24,32,48,0.06)]">
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-[var(--surface-2)] border-b border-[var(--border)]">
+                  <thead className="sticky top-0 z-10 border-b border-[#d7d7da] bg-[#f4f4f5]">
                     <tr>
                       <th className="pl-3 pr-1 py-2.5 w-12" />
-                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{rT.typeCol}</th>
-                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{rT.valueCol}</th>
-                      <th className="py-2.5 pr-3 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{rT.policyCol}</th>
-                      <th className="py-2.5 pr-3 text-right text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{rT.matchesCol}</th>
-                      <th className="py-2.5 pr-2 text-left text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{rT.notesCol}</th>
+                      <th className="py-3 pr-3 text-left text-[13px] font-bold text-[var(--muted)]">{rT.typeCol}</th>
+                      <th className="py-3 pr-3 text-left text-[13px] font-bold text-[var(--muted)]">{rT.valueCol}</th>
+                      <th className="py-3 pr-3 text-left text-[13px] font-bold text-[var(--muted)]">{rT.policyCol}</th>
+                      <th className="py-3 pr-3 text-right text-[13px] font-bold text-[var(--muted)]">{rT.matchesCol}</th>
+                      <th className="py-3 pr-2 text-left text-[13px] font-bold text-[var(--muted)]">{rT.notesCol}</th>
                       <th className="py-2.5 pr-3 w-10" />
                     </tr>
                   </thead>
 
                   <SortableContext items={filtered.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                    <tbody className="divide-y divide-[var(--border)]">
+                    <tbody className="divide-y divide-[#ececef]">
                       {isLoading ? (
                         <SkeletonRows />
                       ) : groupByPolicy ? (
@@ -882,7 +883,7 @@ export default function RulesPage() {
 
       {/* Dialogs */}
       <RuleDialog
-        key={editingRule?.id ?? "new-rule"}
+        key={editingRule?.id ?? (showAddRule ? "new-rule-open" : "new-rule-closed")}
         open={showAddRule}
         onClose={() => { setShowAddRule(false); setEditingRule(undefined); }}
         editingRule={editingRule}

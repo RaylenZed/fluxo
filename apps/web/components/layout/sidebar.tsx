@@ -77,18 +77,24 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
       className={cn(
         "flex h-full flex-col overflow-hidden bg-[var(--sidebar)]",
         mobile
-          ? "w-[280px] max-w-[calc(100vw-1rem)] rounded-[20px] border border-[var(--sidebar-border)] shadow-[0_12px_30px_rgba(0,0,0,0.18)]"
-          : "w-[220px] shrink-0 rounded-l-[24px] border-r border-[var(--sidebar-border)]"
+          ? "w-[288px] max-w-[calc(100vw-1rem)] rounded-[20px] border border-[var(--sidebar-border)] shadow-[0_12px_30px_rgba(0,0,0,0.18)]"
+          : "w-[244px] shrink-0 border-r border-[var(--sidebar-border)] md:rounded-l-[24px]"
       )}
     >
+      <div className="hidden gap-2 px-5 pt-4 md:flex">
+        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+      </div>
+
       {/* Logo */}
-      <div className="flex items-center justify-between gap-2.5 px-5 py-5">
+      <div className="flex items-center justify-between gap-2.5 px-5 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[var(--brand-500)] shadow-sm">
-            <Zap className="h-4 w-4 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[var(--brand-500)] shadow-[0_5px_14px_rgba(0,122,255,0.30)]">
+            <Zap className="h-5 w-5 text-white" />
           </div>
           <div>
-            <span className="text-[15px] font-bold tracking-tight text-[var(--brand-500)]">Fluxo</span>
+            <span className="text-[17px] font-bold tracking-tight text-[var(--brand-500)]">Fluxo</span>
           </div>
         </div>
         {mobile && (
@@ -104,7 +110,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
       </div>
 
       {/* Mihomo status */}
-      <div className="mx-3 mb-3 flex items-center justify-between rounded-[12px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]">
+      <div className="mx-4 mb-5 flex items-center justify-between rounded-[9px] border border-black/5 bg-white/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[var(--surface-2)]">
         <div className="flex items-center gap-1.5">
           <span
             className={cn(
@@ -112,20 +118,20 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
               isRunning ? "bg-emerald-500 animate-pulse-dot" : "bg-[var(--muted-foreground)]"
             )}
           />
-          <span className={cn("text-xs font-medium", isRunning ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--muted)]")}>
+          <span className={cn("text-[13px] font-semibold", isRunning ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--muted)]")}>
             {isRunning ? t.status.running : t.status.stopped}
           </span>
         </div>
-        <span className="text-xs text-[var(--muted)]">
+        <span className="text-[13px] font-medium text-[var(--muted)]">
           {version ? `v${version}` : t.status.unknown}
         </span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
         {navItems.map((section) => (
-          <div key={section.group} className="mb-1">
-            <p className="mb-1 mt-4 px-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          <div key={section.group} className="mb-2">
+            <p className="mb-1 mt-4 px-2 text-[13px] font-semibold tracking-normal text-[var(--muted-foreground)]">
               {section.group}
             </p>
             {section.items.map((item) => {
@@ -138,15 +144,15 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
                         href={item.href}
                         onClick={mobile ? onClose : undefined}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-all duration-150 mb-0.5",
+                          "mb-0.5 flex h-10 items-center gap-3 rounded-[8px] px-3 text-[16px] font-semibold tracking-[-0.01em] transition-all duration-150",
                           isActive
-                            ? "bg-[var(--sidebar-active)] text-[var(--brand-600)] dark:text-[var(--brand-400)]"
+                            ? "bg-[var(--sidebar-active)] text-[var(--foreground)]"
                             : "text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
                         )}
                       >
                         <item.icon
                           className={cn(
-                            "h-4 w-4 shrink-0",
+                            "h-[18px] w-[18px] shrink-0",
                             isActive ? "text-[var(--brand-500)]" : "text-current"
                           )}
                         />
@@ -166,7 +172,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
       </nav>
 
       {/* Bottom items + language switcher */}
-      <div className="shrink-0 px-3 pb-4 border-t border-[var(--sidebar-border)] pt-3">
+      <div className="shrink-0 border-t border-[var(--sidebar-border)] px-4 pb-4 pt-3">
         {bottomItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href);
           return (
@@ -175,24 +181,24 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
               href={item.href}
               onClick={mobile ? onClose : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-all duration-150 mb-0.5",
+                "mb-0.5 flex h-10 items-center gap-3 rounded-[8px] px-3 text-[16px] font-semibold tracking-[-0.01em] transition-all duration-150",
                 isActive
-                  ? "bg-[var(--sidebar-active)] text-[var(--brand-600)] dark:text-[var(--brand-400)]"
+                  ? "bg-[var(--sidebar-active)] text-[var(--foreground)]"
                   : "text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
               )}
             >
-              <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[var(--brand-500)]" : "text-current")} />
+              <item.icon className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-[var(--brand-500)]" : "text-current")} />
               <span>{item.label}</span>
             </Link>
           );
         })}
 
         {/* Language switcher */}
-        <div className="mt-2 flex items-center gap-1 rounded-[10px] bg-[var(--surface-2)] p-1">
+        <div className="mt-2 flex items-center gap-1 rounded-[8px] bg-white/45 p-1 dark:bg-[var(--surface-2)]">
           <button
             onClick={() => setLocale('en')}
             className={cn(
-              "flex-1 rounded-[8px] py-1 text-xs font-medium transition-all",
+              "flex-1 rounded-[6px] py-1 text-xs font-semibold transition-all",
               locale === 'en'
                 ? "bg-[var(--brand-500)] text-white shadow-sm"
                 : "text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -203,7 +209,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
           <button
             onClick={() => setLocale('zh')}
             className={cn(
-              "flex-1 rounded-[8px] py-1 text-xs font-medium transition-all",
+              "flex-1 rounded-[6px] py-1 text-xs font-semibold transition-all",
               locale === 'zh'
                 ? "bg-[var(--brand-500)] text-white shadow-sm"
                 : "text-[var(--muted)] hover:text-[var(--foreground)]"

@@ -77,15 +77,15 @@ function ModeSegment({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--surface-2)] p-0.5 border border-[var(--border)]">
+    <div className="flex items-center gap-0.5 rounded-full border border-black/5 bg-[#e3e3e6] p-0.5 shadow-[inset_0_1px_1px_rgba(0,0,0,0.04)] dark:bg-[var(--surface-2)]">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-[8px] px-3 py-1 text-xs font-semibold transition-all duration-150",
+            "rounded-full px-5 py-1.5 text-[13px] font-bold transition-all duration-150",
             value === opt.value
-              ? "bg-[var(--brand-500)] text-white shadow-sm"
+              ? "bg-[var(--brand-500)] text-white shadow-[0_1px_2px_rgba(0,0,0,0.16)]"
               : "text-[var(--muted)] hover:text-[var(--foreground)]"
           )}
         >
@@ -108,7 +108,7 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 h-10 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-1.5 pr-3 ml-1 hover:bg-[var(--surface-2)] transition-colors outline-none">
+        <button className="ml-1 flex h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-1.5 pr-3 outline-none transition-colors hover:bg-[var(--surface-2)]">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-500)] shrink-0">
             <Zap className="h-3.5 w-3.5 text-white" />
           </div>
@@ -133,34 +133,34 @@ export function Topbar({ title, description, children }: TopbarProps) {
   const showTunSwitch = tunStatus?.applyMode === "managed";
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-3 bg-[var(--background)]/90 backdrop-blur-md px-5 border-b border-[var(--border)]">
+    <header className="sticky top-0 z-10 flex min-h-[86px] items-start gap-5 border-b border-black/5 bg-[var(--background)]/92 px-7 pb-4 pt-6 backdrop-blur-md">
       {/* Page title */}
-      <div className="flex min-w-[140px] shrink-0 items-center gap-2 pl-12 md:pl-0">
-        <h1 className="text-[15px] font-bold text-[var(--foreground)] truncate">{title}</h1>
+      <div className="flex min-w-[190px] shrink-0 flex-col pl-12 md:pl-0">
+        <h1 className="truncate text-[34px] font-black leading-none tracking-[-0.02em] text-[var(--foreground)]">{title}</h1>
         {description && (
-          <span className="hidden lg:block text-xs text-[var(--muted)] truncate">{description}</span>
+          <span className="mt-2 hidden truncate text-[14px] font-medium text-[var(--muted)] lg:block">{description}</span>
         )}
       </div>
 
       {/* Search bar — center, flex-1 */}
-      <div className="flex-1 mx-2 hidden sm:block">
-        <div className="flex items-center gap-2.5 h-10 rounded-full bg-[var(--surface-2)] border border-[var(--border)] px-4 max-w-[480px] mx-auto">
-          <Search className="h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0" />
+      <div className="mx-2 hidden flex-1 sm:block">
+        <div className="mx-auto flex h-11 max-w-[560px] items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+          <Search className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
           <input
             type="text"
             placeholder={t.topbar.searchPlaceholder}
-            className="flex-1 bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] outline-none"
+            className="flex-1 bg-transparent text-[15px] font-medium text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]"
             readOnly
           />
         </div>
       </div>
 
       {/* Right actions */}
-      <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-0">
         {children}
 
         {/* TUN toggle */}
-        {showTunSwitch && <div className="hidden md:flex items-center gap-2 pr-2 border-r border-[var(--border)]">
+        {showTunSwitch && <div className="hidden items-center gap-2 border-r border-[var(--border)] pr-2 md:flex">
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <span
               className={cn("text-xs font-medium", tunMismatch ? "text-amber-600 dark:text-amber-400" : "text-[var(--muted)]")}
@@ -179,7 +179,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
         {/* Theme toggle — circular */}
         <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-all"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-all hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]"
           aria-label={t.topbar.toggleTheme}
         >
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -187,7 +187,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
         </button>
 
         {/* Notifications — circular */}
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-all">
+        <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-all hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]">
           <Bell className="h-4 w-4" />
           <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[var(--brand-500)] border-2 border-[var(--surface)]" />
         </button>

@@ -335,15 +335,15 @@ function GroupCard({
   return (
     <Card
       className={cn(
-        "group flex h-[128px] flex-col rounded-[10px] p-3 shadow-[0_1px_2px_rgba(15,17,23,0.04)] transition-all duration-150",
-        "hover:-translate-y-0.5 hover:border-[var(--brand-200)] hover:shadow-[0_10px_24px_rgba(15,17,23,0.08)]",
-        selectedProxy !== "DIRECT" && "bg-gradient-to-br from-white to-[var(--surface-2)] dark:from-[var(--surface)] dark:to-[var(--surface-2)]",
-        hasPendingRuntimeChanges && "border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10"
+        "group flex h-[132px] flex-col rounded-[10px] border-0 bg-[#eeeeef] p-4 shadow-none transition-all duration-150",
+        "hover:bg-[#e8e9ec] hover:shadow-[0_10px_26px_rgba(24,32,48,0.10)] dark:bg-[var(--surface-2)]",
+        selectedProxy !== "DIRECT" && "bg-[#f0f0f1]",
+        hasPendingRuntimeChanges && "bg-[#fff7df] ring-1 ring-amber-200 dark:ring-amber-500/30"
       )}
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted-foreground)]">
+          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--muted-foreground)]">
             <TypeIcon className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{typeLabel}</span>
           </div>
@@ -354,7 +354,7 @@ function GroupCard({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-48 rounded-[14px] bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,32,48,0.22)] backdrop-blur dark:bg-[var(--surface)]">
             <DropdownMenuItem onClick={onEdit}>{t.policies.editGroup}</DropdownMenuItem>
             <DropdownMenuItem disabled={!runtimeReady || hasPendingRuntimeChanges} onClick={onLatencyTest}>{t.policies.latencyTest}</DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -363,7 +363,7 @@ function GroupCard({
         </DropdownMenu>
       </div>
 
-      <p className="truncate text-[15px] font-bold text-[var(--foreground)]">{group.name}</p>
+      <p className="truncate text-[18px] font-bold tracking-[-0.01em] text-[var(--foreground)]">{group.name}</p>
       {hasPendingRuntimeChanges && (
         <p className="mt-1 truncate text-[11px] font-medium text-amber-600 dark:text-amber-300">{t.policies.pendingApply}</p>
       )}
@@ -373,12 +373,12 @@ function GroupCard({
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "flex h-8 w-full items-center gap-2 rounded-[8px] border px-2 text-xs font-semibold transition-colors",
+                "flex h-9 w-full items-center gap-2 rounded-[8px] border px-3 text-[13px] font-bold transition-colors",
                 hasPendingRuntimeChanges
                   ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
                   : selectedProxy === "DIRECT"
-                    ? "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface)]"
-                    : "border-transparent bg-[var(--brand-50)] text-[var(--brand-600)] hover:bg-[var(--brand-100)] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]"
+                    ? "border-transparent bg-white/50 text-[var(--muted)] hover:bg-white"
+                    : "border-transparent bg-[#e9f2ff] text-[var(--brand-600)] hover:bg-[#dcecff] dark:bg-[var(--brand-500)]/20 dark:text-[var(--brand-300)]"
               )}
             >
               <span className="min-w-0 flex-1 truncate text-left">{selectedProxy}</span>
@@ -393,7 +393,7 @@ function GroupCard({
               <ChevronDown className="h-3 w-3 shrink-0" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-72 p-1">
+          <DropdownMenuContent align="start" className="w-80 rounded-[14px] bg-white/96 p-0 shadow-[0_18px_46px_rgba(24,32,48,0.20)] backdrop-blur dark:bg-[var(--surface)]">
             <DropdownMenuLabel className="flex items-center justify-between gap-3">
               <span className="truncate">{group.name}</span>
               {displayedNodes.length > 0 && (
@@ -401,7 +401,7 @@ function GroupCard({
               )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <div className="max-h-[320px] overflow-y-auto">
+            <div className="max-h-[340px] overflow-y-auto px-1.5 pb-1.5">
               {displayedNodes.map((node) => {
                 const disabled = !runtimeReady || !node.loadedInRuntime;
                 const selected = selectedProxy === node.name;
@@ -410,7 +410,7 @@ function GroupCard({
                     key={node.name}
                     disabled={disabled}
                     onSelect={() => void switchProxy(node.name)}
-                    className="min-h-9 gap-2"
+                    className="min-h-12 gap-3 rounded-[8px]"
                   >
                     <Check className={cn("h-3.5 w-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
                     <div className="min-w-0 flex-1">
@@ -446,9 +446,9 @@ function GroupCard({
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 function NodeSkeleton() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i} className="p-3 h-[90px] animate-pulse bg-[var(--surface-2)]" />
+        <Card key={i} className="h-[112px] animate-pulse rounded-[10px] border-0 bg-[#eeeeef] p-4 shadow-none" />
       ))}
     </div>
   );
@@ -456,9 +456,9 @@ function NodeSkeleton() {
 
 function GroupSkeleton() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
       {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i} className="p-3 h-[110px] animate-pulse bg-[var(--surface-2)]" />
+        <Card key={i} className="h-[132px] animate-pulse rounded-[10px] border-0 bg-[#eeeeef] p-4 shadow-none" />
       ))}
     </div>
   );
@@ -488,10 +488,10 @@ function SectionHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-3">
+    <div className="mb-4 flex items-center justify-between gap-3">
       <div className="flex items-baseline gap-2">
-        <h2 className={cn("text-sm font-bold", accent ? "text-[var(--brand-500)]" : "text-[var(--foreground)]")}>{title}</h2>
-        <span className="text-xs text-[var(--muted)]">{count}</span>
+        <h2 className={cn("text-[17px] font-black tracking-[-0.01em]", accent ? "text-[#c026d3]" : "text-[var(--brand-500)]")}>{title}</h2>
+        <span className="text-[15px] font-medium text-[var(--muted)]">{count}</span>
       </div>
       {action}
     </div>
@@ -705,9 +705,9 @@ export default function PoliciesPage() {
         </Button>
       </Topbar>
 
-      <div className="flex-1 overflow-auto px-6 py-5">
+      <div className="flex-1 overflow-auto px-8 py-7">
         {runtimeProxiesQuery.isError && (
-          <div className="mb-4 flex items-start gap-3 rounded-[10px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="mb-5 flex items-start gap-3 rounded-[12px] border border-amber-200 bg-[#fff9e9] px-5 py-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <ServerCrash className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t.policies.runtimeStateUnavailable}</p>
@@ -717,7 +717,7 @@ export default function PoliciesPage() {
         )}
 
         {hasPendingRuntimeSync && (
-          <div className="mb-5 flex items-start gap-3 rounded-[10px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="mb-6 flex items-start gap-3 rounded-[12px] border border-amber-200 bg-[#fff9e9] px-5 py-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <Clock className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t.policies.runtimeSyncNeeded}</p>
@@ -739,14 +739,14 @@ export default function PoliciesPage() {
         )}
 
         {/* Proxy Nodes */}
-        <section className="mb-8">
+        <section className="mb-10">
           <SectionHeader
             title={t.policies.proxyNodes}
             count={proxyNodes.length}
             accent
             action={
               proxyNodes.length > 0 ? (
-                <Button size="sm" variant="secondary" onClick={() => setShowAddNode(true)} className="h-7 gap-1.5 px-2 text-xs">
+                <Button size="sm" variant="secondary" onClick={() => setShowAddNode(true)} className="h-8 gap-1.5 rounded-[7px] px-3 text-xs">
                   <Plus className="h-3.5 w-3.5" />
                   {t.policies.addNode}
                 </Button>
@@ -759,17 +759,17 @@ export default function PoliciesPage() {
           ) : proxiesQuery.isError ? (
             <ApiError />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {proxyNodes.map((node) => {
                 const latency = readProxyLatency(node.config);
                 const loadedInRuntime = runtimeLoadedNames ? runtimeLoadedNames.has(node.name) : true;
 
                 return (
-                  <Card key={node.id} className="group flex h-[96px] flex-col rounded-[10px] p-3 shadow-[0_1px_2px_rgba(15,17,23,0.04)] transition-all duration-150 hover:-translate-y-0.5 hover:border-[var(--brand-200)] hover:shadow-[0_10px_24px_rgba(15,17,23,0.08)]">
+                  <Card key={node.id} className="group flex h-[112px] flex-col rounded-[10px] border-0 bg-[#eeeeef] p-4 shadow-none transition-all duration-150 hover:bg-[#e8e9ec] hover:shadow-[0_10px_26px_rgba(24,32,48,0.10)] dark:bg-[var(--surface-2)]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase text-[var(--muted-foreground)]">{node.type}</div>
-                        <p className="mt-1 truncate text-[15px] font-bold text-[var(--foreground)]">{node.name}</p>
+                        <div className="text-[13px] font-semibold text-[var(--muted-foreground)]">{node.type}</div>
+                        <p className="mt-1 truncate text-[17px] font-bold tracking-[-0.01em] text-[var(--foreground)]">{node.name}</p>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -777,7 +777,7 @@ export default function PoliciesPage() {
                             <MoreHorizontal className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-36">
+                        <DropdownMenuContent align="end" className="w-40 rounded-[14px] bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,32,48,0.22)] backdrop-blur dark:bg-[var(--surface)]">
                           <DropdownMenuItem onClick={() => setEditingNodeId(node.id)}>{t.policies.editNode}</DropdownMenuItem>
                           <DropdownMenuItem disabled={!runtimeReady || !loadedInRuntime} onClick={() => testNodeLatency(node.name, node.id)}>{t.policies.latencyTest}</DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -796,7 +796,7 @@ export default function PoliciesPage() {
                           {t.policies.pendingApply}
                         </span>
                       ) : latency > 0 ? (
-                        <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold", getLatencyBg(latency))}>
+                        <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[13px] font-bold", getLatencyBg(latency))}>
                           {latency}ms
                         </span>
                       ) : (
@@ -807,7 +807,7 @@ export default function PoliciesPage() {
                 );
               })}
               <button
-                className="flex h-[96px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[var(--border)] p-3 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-[var(--surface)] hover:text-[var(--brand-500)]"
+                className="flex h-[112px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[#cfd3da] p-4 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-white/60 hover:text-[var(--brand-500)]"
                 onClick={() => setShowAddNode(true)}
               >
                 <Plus className="h-5 w-5" />
@@ -823,7 +823,7 @@ export default function PoliciesPage() {
             title={t.policies.policyGroups}
             count={proxyGroups.length}
             action={
-              <Button size="sm" variant="secondary" onClick={() => setShowNewGroup(true)} className="h-7 gap-1.5 px-2 text-xs">
+              <Button size="sm" variant="secondary" onClick={() => setShowNewGroup(true)} className="h-8 gap-1.5 rounded-[7px] px-3 text-xs">
                 <Plus className="h-3.5 w-3.5" />
                 {t.policies.addGroup}
               </Button>
@@ -835,7 +835,7 @@ export default function PoliciesPage() {
           ) : groupsQuery.isError ? (
             <ApiError />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {proxyGroups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -851,7 +851,7 @@ export default function PoliciesPage() {
                 />
               ))}
               <button
-                className="flex h-[128px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[var(--border)] p-3 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-[var(--surface)] hover:text-[var(--brand-500)]"
+                className="flex h-[132px] flex-col items-center justify-center rounded-[10px] border border-dashed border-[#cfd3da] p-4 text-[var(--muted)] transition-all hover:border-[var(--brand-400)] hover:bg-white/60 hover:text-[var(--brand-500)]"
                 onClick={() => setShowNewGroup(true)}
               >
                 <Plus className="h-5 w-5" />

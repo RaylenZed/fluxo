@@ -189,7 +189,12 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
   };
 
   const renderMemberRows = (members: MemberItem[], showNoProxiesMessage = false) => (
-    <div className="space-y-1 max-h-[240px] overflow-y-auto pr-1">
+    <div className="max-h-[420px] overflow-y-auto rounded-[6px] border border-[#d7d7da] bg-white dark:bg-[var(--surface)]">
+      <div className="sticky top-0 z-10 grid h-9 grid-cols-[52px_110px_minmax(0,1fr)] items-center border-b border-[#d7d7da] bg-white/95 text-[13px] font-bold text-[var(--muted)] backdrop-blur dark:bg-[var(--surface)]">
+        <span />
+        <span>{gT.type}</span>
+        <span>{gT.tabMembers}</span>
+      </div>
       {members.map((proxy) => {
         const group = proxy.kind === "group" ? groupByName.get(proxy.name) : undefined;
         const groupProviders = group ? parseStringList(group.providers) : [];
@@ -201,36 +206,38 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
           <div key={proxy.name}>
             <button
               onClick={() => toggleProxy(proxy.name)}
-              className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
-                selected.includes(proxy.name) ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
+              className={cn("grid min-h-11 w-full grid-cols-[52px_110px_minmax(0,1fr)] items-center border-b border-[#ececef] text-left text-[15px] transition-colors duration-150",
+                selected.includes(proxy.name) ? "bg-[#edf5ff] dark:bg-[var(--brand-500)]/15" : "hover:bg-[#f5f5f6]"
               )}
             >
-              <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
-                selected.includes(proxy.name) ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
-              )}>
-                {selected.includes(proxy.name) && <Check className="h-2.5 w-2.5 text-white" />}
+              <div className="flex justify-center">
+                <div className={cn("flex h-5 w-5 items-center justify-center rounded-[5px] border transition-all",
+                  selected.includes(proxy.name) ? "border-[var(--brand-500)] bg-[var(--brand-500)]" : "border-[#d9dbe2] bg-[#eeeeef]"
+                )}>
+                  {selected.includes(proxy.name) && <Check className="h-3.5 w-3.5 text-white" />}
+                </div>
               </div>
-              <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{proxy.type}</span>
-              <span className="flex-1 text-left font-medium text-[var(--foreground)]">{proxy.name}</span>
+              <span className="w-fit rounded-[5px] bg-[#f2f3f5] px-2 py-1 font-mono text-[12px] uppercase text-[var(--muted-foreground)]">{proxy.type}</span>
+              <span className="truncate pr-3 font-semibold text-[var(--foreground)]">{proxy.name}</span>
             </button>
 
             {canLoadGroupNodes && (
-              <div className="ml-10 mt-1 space-y-1">
+              <div className="border-b border-[#ececef] bg-white dark:bg-[var(--surface)]">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => group && loadGroupNodes.mutate(group)}
                   disabled={isLoadingGroupNodes}
-                  className="h-7 px-2 text-xs text-[var(--muted)]"
+                  className="ml-[156px] h-8 px-2 text-[13px] font-semibold text-[var(--muted)]"
                 >
                   {isLoadingGroupNodes ? gT.loadingGroupNodes : gT.loadGroupNodes}
                 </Button>
 
                 {groupPreview?.map((providerPreview) => (
-                  <div key={providerPreview.providerName} className="space-y-1 border-l border-[var(--border)] pl-3">
+                  <div key={providerPreview.providerName} className="border-l border-[#d7d7da] ml-[104px]">
                     {providerPreview.names.length === 0 ? (
-                      <p className="py-1 text-xs text-[var(--muted)]">{gT.noProviderNodes}</p>
+                      <p className="py-2 pl-4 text-xs text-[var(--muted)]">{gT.noProviderNodes}</p>
                     ) : providerPreview.names.map((nodeName) => {
                       const isSelected = selectedProviderNodes[providerPreview.providerName]?.includes(nodeName) ?? false;
                       return (
@@ -238,17 +245,19 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                           key={`${providerPreview.providerName}:${nodeName}`}
                           type="button"
                           onClick={() => toggleProviderNode(providerPreview.providerName, nodeName, proxy.name)}
-                          className={cn("w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition-all duration-150",
-                            isSelected ? "bg-[var(--brand-50)] dark:bg-[var(--brand-500)]/15" : "hover:bg-[var(--surface-2)]"
+                          className={cn("grid min-h-10 w-full grid-cols-[52px_110px_minmax(0,1fr)] items-center text-left text-[14px] transition-colors duration-150",
+                            isSelected ? "bg-[#edf5ff] dark:bg-[var(--brand-500)]/15" : "hover:bg-[#f5f5f6]"
                           )}
                         >
-                          <div className={cn("h-4 w-4 rounded-[4px] border flex items-center justify-center transition-all",
-                            isSelected ? "bg-[var(--brand-500)] border-[var(--brand-500)]" : "border-[var(--border)] bg-[var(--surface-2)]"
-                          )}>
-                            {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                          <div className="flex justify-center">
+                            <div className={cn("flex h-5 w-5 items-center justify-center rounded-[5px] border transition-all",
+                              isSelected ? "border-[var(--brand-500)] bg-[var(--brand-500)]" : "border-[#d9dbe2] bg-[#eeeeef]"
+                            )}>
+                              {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                            </div>
                           </div>
-                          <span className="text-xs text-[var(--muted-foreground)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 font-mono uppercase">{gT.providerNode}</span>
-                          <span className="flex-1 truncate text-left font-medium text-[var(--foreground)]">{nodeName}</span>
+                          <span className="w-fit rounded-[5px] bg-[#f2f3f5] px-2 py-1 font-mono text-[12px] uppercase text-[var(--muted-foreground)]">{gT.providerNode}</span>
+                          <span className="truncate pr-3 font-semibold text-[var(--foreground)]">{nodeName}</span>
                         </button>
                       );
                     })}
@@ -259,29 +268,36 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
           </div>
         );
       })}
-      {showNoProxiesMessage && <p className="text-xs text-[var(--muted)] text-center py-2">{gT.noProxies}</p>}
+      {showNoProxiesMessage && <p className="py-3 text-center text-xs text-[var(--muted)]">{gT.noProxies}</p>}
     </div>
   );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>{groupName ? gT.titleEdit.replace("{name}", groupName) : gT.titleNew}</DialogTitle>
-          <DialogDescription>{gT.description}</DialogDescription>
+      <DialogContent className="max-h-[88vh] w-[min(980px,calc(100vw-32px))] max-w-none overflow-hidden rounded-[24px] bg-[#fbfbfd] shadow-[0_26px_90px_rgba(0,0,0,0.28)]">
+        <DialogHeader className="border-b border-[#e6e6e8] px-9 pb-5 pt-7">
+          <DialogTitle className="text-[30px] font-black tracking-[-0.02em]">
+            {groupName ? gT.titleEdit.replace("{name}", groupName) : gT.titleNew}
+          </DialogTitle>
+          <DialogDescription className="text-[17px] font-medium text-[var(--muted)]">{gT.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 pb-2 space-y-4">
+        <div className="max-h-[calc(88vh-176px)] space-y-5 overflow-y-auto px-9 py-6">
           {/* Name + Type */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--muted)]">{gT.groupName}</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={gT.groupNamePlaceholder} />
+              <label className="text-[15px] font-bold text-[var(--muted)]">{gT.groupName}</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={gT.groupNamePlaceholder}
+                className="h-12 rounded-[9px] bg-white text-[18px] font-semibold"
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--muted)]">{gT.type}</label>
+              <label className="text-[15px] font-bold text-[var(--muted)]">{gT.type}</label>
               <Select value={type} onValueChange={setType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-12 rounded-[9px] bg-white text-[18px] font-semibold"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="select">{gT.typeManual}</SelectItem>
                   <SelectItem value="url-test">{gT.typeAuto}</SelectItem>
@@ -294,23 +310,23 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
 
           {/* Tabs */}
           <Tabs defaultValue="members">
-            <TabsList className="w-full">
-              <TabsTrigger value="members" className="flex-1 gap-1.5">
+            <TabsList className="grid h-12 w-full grid-cols-4 rounded-[12px] bg-[#f1f2f5] p-1">
+              <TabsTrigger value="members" className="gap-2 text-[16px] font-bold data-[state=active]:rounded-[10px]">
                 <Check className="h-3.5 w-3.5" />{gT.tabMembers}
               </TabsTrigger>
-              <TabsTrigger value="external" className="flex-1 gap-1.5">
+              <TabsTrigger value="external" className="gap-2 text-[16px] font-bold data-[state=active]:rounded-[10px]">
                 <ExternalLink className="h-3.5 w-3.5" />{gT.tabExternal}
               </TabsTrigger>
-              <TabsTrigger value="filter" className="flex-1 gap-1.5">
+              <TabsTrigger value="filter" className="gap-2 text-[16px] font-bold data-[state=active]:rounded-[10px]">
                 <Filter className="h-3.5 w-3.5" />{gT.tabFilter}
               </TabsTrigger>
-              <TabsTrigger value="options" className="flex-1 gap-1.5">
+              <TabsTrigger value="options" className="gap-2 text-[16px] font-bold data-[state=active]:rounded-[10px]">
                 <Layers className="h-3.5 w-3.5" />{gT.tabOptions}
               </TabsTrigger>
             </TabsList>
 
             {/* Members tab */}
-            <TabsContent value="members" className="mt-3">
+            <TabsContent value="members" className="mt-5">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8 gap-2 text-sm text-[var(--muted)]">
                   <Loader2 className="h-4 w-4 animate-spin" />{gT.loadingProxies}
@@ -323,24 +339,24 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
             </TabsContent>
 
             {/* External provider tab */}
-            <TabsContent value="external" className="mt-3 space-y-3">
-              <div className="flex items-center justify-between rounded-[12px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]">
+            <TabsContent value="external" className="mt-5 space-y-4">
+              <div className="flex items-center justify-between rounded-[10px] border border-[#e1e2e8] bg-white px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-[var(--foreground)]">{gT.includeExternal}</p>
-                  <p className="text-xs text-[var(--muted)]">{gT.includeExternalDesc}</p>
+                  <p className="text-[16px] font-bold text-[var(--foreground)]">{gT.includeExternal}</p>
+                  <p className="text-[14px] font-medium text-[var(--muted)]">{gT.includeExternalDesc}</p>
                 </div>
                 <Switch checked={useExternal} onCheckedChange={setUseExternal} />
               </div>
               {useExternal && (
                 <div className="space-y-3 pl-1">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-[var(--muted)]">{gT.subscriptionUrl}</label>
+                    <label className="text-[15px] font-bold text-[var(--muted)]">{gT.subscriptionUrl}</label>
                     <div className="flex gap-2">
                       <Input
                         value={effectiveExternalUrl}
                         onChange={(e) => setExternalUrl(e.target.value)}
                         placeholder="https://example.com/sub.yaml"
-                        className="font-mono text-xs"
+                        className="h-11 bg-white font-mono text-[14px]"
                       />
                       <Button
                         type="button"
@@ -358,11 +374,11 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-[var(--muted)]">{gT.autoUpdateInterval}</label>
-                    <Input type="number" value={effectiveExternalInterval} onChange={(e) => setExternalInterval(e.target.value)} />
+                    <label className="text-[15px] font-bold text-[var(--muted)]">{gT.autoUpdateInterval}</label>
+                    <Input className="h-11 bg-white text-[15px]" type="number" value={effectiveExternalInterval} onChange={(e) => setExternalInterval(e.target.value)} />
                   </div>
                   {visibleExternalPreview && (
-                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                    <div className="rounded-[10px] border border-[#e1e2e8] bg-white p-4">
                       <p className="text-xs font-semibold text-[var(--foreground)]">
                         {gT.externalPreviewReady.replace("{count}", String(visibleExternalPreview.count))}
                       </p>
@@ -372,7 +388,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
                         </p>
                       )}
                       {visibleExternalPreview.names.length > 0 && (
-                        <div className="mt-2 max-h-28 overflow-y-auto rounded-[8px] bg-[var(--surface)] border border-[var(--border)]">
+                        <div className="mt-3 max-h-36 overflow-y-auto rounded-[8px] border border-[#e1e2e8] bg-[#f7f7f8]">
                           {uniqueStrings(visibleExternalPreview.names).slice(0, 12).map((proxyName) => (
                             <div key={proxyName} className="truncate px-2 py-1 text-xs text-[var(--foreground)]">
                               {proxyName}
@@ -387,48 +403,48 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
             </TabsContent>
 
             {/* Filter tab */}
-            <TabsContent value="filter" className="mt-3 space-y-3">
-              <div className="rounded-[12px] bg-[var(--surface-2)] px-3 py-2.5 border border-[var(--border)]">
+            <TabsContent value="filter" className="mt-5 space-y-4">
+              <div className="rounded-[10px] border border-[#e1e2e8] bg-white px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">{gT.includeAllProxies}</p>
-                    <p className="text-xs text-[var(--muted)]">{gT.includeAllProxiesDesc}</p>
+                    <p className="text-[16px] font-bold text-[var(--foreground)]">{gT.includeAllProxies}</p>
+                    <p className="text-[14px] font-medium text-[var(--muted)]">{gT.includeAllProxiesDesc}</p>
                   </div>
                   <Switch checked={useAllProxies} onCheckedChange={setUseAllProxies} />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[var(--muted)]">{gT.filterRegex}</label>
-                <Input value={filterRegex} onChange={(e) => setFilterRegex(e.target.value)} placeholder='e.g. ^(?=.*(US|美国)).*$' className="font-mono text-xs" />
-                <p className="text-[11px] text-[var(--muted-foreground)]">{gT.filterRegexDesc}</p>
+                <label className="text-[15px] font-bold text-[var(--muted)]">{gT.filterRegex}</label>
+                <Input value={filterRegex} onChange={(e) => setFilterRegex(e.target.value)} placeholder='e.g. ^(?=.*(US|美国)).*$' className="h-11 bg-white font-mono text-[14px]" />
+                <p className="text-[13px] font-medium text-[var(--muted-foreground)]">{gT.filterRegexDesc}</p>
               </div>
             </TabsContent>
 
             {/* Options tab */}
-            <TabsContent value="options" className="mt-3 space-y-3">
+            <TabsContent value="options" className="mt-5 space-y-4">
               {(type === "url-test" || type === "fallback") && (
                 <>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.testUrl}</label>
-                    <Input value={url} onChange={(e) => setUrl(e.target.value)} />
+                    <label className="text-[15px] font-bold text-[var(--muted)]">{t.proxyNode.testUrl}</label>
+                    <Input className="h-11 bg-white text-[15px]" value={url} onChange={(e) => setUrl(e.target.value)} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.testInterval}</label>
-                      <Input type="number" value={interval} onChange={(e) => setInterval(e.target.value)} />
+                      <label className="text-[15px] font-bold text-[var(--muted)]">{t.proxyNode.testInterval}</label>
+                      <Input className="h-11 bg-white text-[15px]" type="number" value={interval} onChange={(e) => setInterval(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.tolerance}</label>
-                      <Input type="number" value={tolerance} onChange={(e) => setTolerance(e.target.value)} />
+                      <label className="text-[15px] font-bold text-[var(--muted)]">{t.proxyNode.tolerance}</label>
+                      <Input className="h-11 bg-white text-[15px]" type="number" value={tolerance} onChange={(e) => setTolerance(e.target.value)} />
                     </div>
                   </div>
                 </>
               )}
               {type === "load-balance" && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[var(--muted)]">{t.proxyNode.strategy}</label>
+                  <label className="text-[15px] font-bold text-[var(--muted)]">{t.proxyNode.strategy}</label>
                   <Select value={strategy} onValueChange={setStrategy}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 bg-white text-[15px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="consistent-hashing">Consistent Hashing</SelectItem>
                       <SelectItem value="round-robin">Round Robin</SelectItem>
@@ -445,7 +461,7 @@ export function ProxyGroupDialog({ open, onClose, onSave, groupName, editGroup }
           </Tabs>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-[#e6e6e8] bg-[#fbfbfd] px-9 py-5">
           <Button variant="secondary" onClick={onClose}>{gT.cancel}</Button>
           <Button
             onClick={() => {
