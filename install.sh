@@ -482,6 +482,10 @@ install_fluxo() {
       log_info "Skipping Fluxo install"
       return 0
     fi
+    if want_fluxo; then
+      log_detail "Stopping Fluxo services before replacing files..."
+      systemctl stop fluxo-web.service fluxo.service 2>/dev/null || true
+    fi
     log_detail "Removing existing installation..."
     rm -rf "$INSTALL_DIR"
   fi
@@ -547,6 +551,8 @@ install_fluxo() {
   cp -r "${INSTALL_DIR}/apps/web/public" "${web_standalone}/public" 2>/dev/null || true
   mkdir -p "${web_standalone}/.next"
   cp -r "${INSTALL_DIR}/apps/web/.next/static" "${web_standalone}/.next/static" 2>/dev/null || true
+  [[ -f "${web_standalone}/server.js" ]] || die "Fluxo web standalone server is missing"
+  [[ -d "${web_standalone}/.next/static/chunks" ]] || die "Fluxo web static chunks are missing"
 
   # Install fluxo-cli (system management CLI tool)
   log_detail "Installing fluxo-cli..."
@@ -693,7 +699,7 @@ EOF
 
   if want_fluxo; then
     log_detail "Starting fluxo API..."
-    systemctl start fluxo.service
+    systemctl restart fluxo.service
     sleep 2
 
     if systemctl is-active --quiet fluxo.service; then
@@ -703,7 +709,7 @@ EOF
     fi
 
     log_detail "Starting fluxo web UI..."
-    systemctl start fluxo-web.service
+    systemctl restart fluxo-web.service
     sleep 2
 
     if systemctl is-active --quiet fluxo-web.service; then
