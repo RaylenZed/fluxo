@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
+import { useDesktopMode } from "@/lib/desktop";
 import { toast } from "sonner";
 
 
@@ -48,6 +49,7 @@ function formatInterval(seconds: number): string {
 
 export default function ProvidersPage() {
   const { t } = useLocale();
+  const desktopMode = useDesktopMode();
   const qc = useQueryClient();
   const { data: providers = [], isLoading } = useProviders();
 
@@ -194,7 +196,7 @@ export default function ProvidersPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button
+                  {!desktopMode && <Button
                     size="sm"
                     variant="outline"
                     className="text-xs gap-1.5"
@@ -202,7 +204,7 @@ export default function ProvidersPage() {
                   >
                     <RefreshCw className="h-3 w-3" />
                     {t.providers.update}
-                  </Button>
+                  </Button>}
                   <Button
                     variant="ghost"
                     size="icon-sm"

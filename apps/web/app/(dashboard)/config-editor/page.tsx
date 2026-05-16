@@ -4,6 +4,7 @@ import { Save, RotateCcw, Loader2, AlertTriangle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { ModeSegment, Topbar } from "@/components/layout/topbar";
 import { useLocale } from "@/lib/i18n/context";
+import { useDesktopMode } from "@/lib/desktop";
 import { toast } from "sonner";
 
 // Ports required by Fluxo — warn if user modifies them
@@ -21,6 +22,7 @@ type ConfigSource = "generated" | "raw";
 export default function ConfigEditorPage() {
   const { t } = useLocale();
   const eT = t.configEditor;
+  const desktopMode = useDesktopMode();
 
   const [yaml, setYaml] = useState("");
   const [loadedYaml, setLoadedYaml] = useState("");
@@ -163,7 +165,7 @@ export default function ConfigEditorPage() {
           <Download className="h-3.5 w-3.5" />
           {eT.download}
         </Button>
-        <Button
+        {!desktopMode && <Button
           variant="outline"
           size="sm"
           onClick={() => void handleReload()}
@@ -172,7 +174,7 @@ export default function ConfigEditorPage() {
         >
           {reloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
           {eT.reload}
-        </Button>
+        </Button>}
         <Button
           size="sm"
           onClick={handleSave}
@@ -186,13 +188,13 @@ export default function ConfigEditorPage() {
 
       <div className="flex-1 flex flex-col p-6 min-h-0">
         {/* Protected ports banner */}
-        <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/10 px-3 py-2">
+        {!desktopMode && <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/10 px-3 py-2">
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
           <p className="text-xs text-amber-700 dark:text-amber-400">
             <span className="font-semibold">{activeModeLabel}</span> — {activeModeDesc}&nbsp;
             {PROTECTED_PORTS.map((p) => `${p.port} (${p.service})`).join(" · ")} {eT.reservedPortsWarning}
           </p>
-        </div>
+        </div>}
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-[var(--muted)]" />

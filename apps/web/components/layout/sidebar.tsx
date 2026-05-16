@@ -10,6 +10,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMihomoStatus } from "@/lib/hooks";
 import { useLocale } from "@/lib/i18n/context";
+import { useDesktopMode } from "@/lib/desktop";
 
 interface SidebarProps {
   mobile?: boolean;
@@ -19,58 +20,81 @@ interface SidebarProps {
 
 export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { data: statusData } = useMihomoStatus();
+  const desktopMode = useDesktopMode();
+  const { data: statusData } = useMihomoStatus({ enabled: !desktopMode });
   const isRunning = statusData?.running ?? false;
   const version = statusData?.version ?? null;
   const { locale, setLocale, t } = useLocale();
 
-  const navItems = [
-    {
-      group: t.nav.groupOverview,
-      items: [
-        { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
-        { href: "/activity", label: t.nav.activity, icon: Activity },
-        { href: "/overview", label: t.nav.overview, icon: Eye },
-      ],
-    },
-    {
-      group: t.nav.groupClient,
-      items: [
-        { href: "/processes", label: t.nav.processes, icon: Cpu },
-        { href: "/devices", label: t.nav.devices, icon: Monitor },
-      ],
-    },
-    {
-      group: t.nav.groupProxy,
-      items: [
-        { href: "/policies", label: t.nav.policies, icon: GitBranch },
-        { href: "/rules", label: t.nav.rules, icon: List },
-      ],
-    },
-    {
-      group: t.nav.groupTools,
-      items: [
-        { href: "/capture", label: t.nav.logs, icon: ScrollText },
-        { href: "/mitm", label: t.nav.proxyInfo, icon: Info },
-        { href: "/rewrite", label: t.nav.ruleSets, icon: Database },
-      ],
-    },
-    {
-      group: t.nav.groupSystem,
-      items: [
-        { href: "/modules", label: t.nav.providers, icon: Package },
-        { href: "/profiles", label: t.nav.profiles, icon: FileText },
-        { href: "/scripts", label: t.nav.tasks, icon: CalendarClock },
-        { href: "/dns", label: t.nav.dns, icon: Globe },
-        { href: "/config-editor", label: t.nav.configEditor, icon: FileCode2 },
-      ],
-    },
-  ];
+  const navItems = desktopMode
+    ? [
+        {
+          group: t.nav.groupProxy,
+          items: [
+            { href: "/policies", label: t.nav.policies, icon: GitBranch },
+            { href: "/rules", label: t.nav.rules, icon: List },
+            { href: "/rewrite", label: t.nav.ruleSets, icon: Database },
+          ],
+        },
+        {
+          group: t.nav.groupSystem,
+          items: [
+            { href: "/profiles", label: t.nav.profiles, icon: FileText },
+            { href: "/modules", label: t.nav.providers, icon: Package },
+            { href: "/dns", label: t.nav.dns, icon: Globe },
+            { href: "/config-editor", label: t.nav.configEditor, icon: FileCode2 },
+          ],
+        },
+      ]
+    : [
+        {
+          group: t.nav.groupOverview,
+          items: [
+            { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
+            { href: "/activity", label: t.nav.activity, icon: Activity },
+            { href: "/overview", label: t.nav.overview, icon: Eye },
+          ],
+        },
+        {
+          group: t.nav.groupClient,
+          items: [
+            { href: "/processes", label: t.nav.processes, icon: Cpu },
+            { href: "/devices", label: t.nav.devices, icon: Monitor },
+          ],
+        },
+        {
+          group: t.nav.groupProxy,
+          items: [
+            { href: "/policies", label: t.nav.policies, icon: GitBranch },
+            { href: "/rules", label: t.nav.rules, icon: List },
+          ],
+        },
+        {
+          group: t.nav.groupTools,
+          items: [
+            { href: "/capture", label: t.nav.logs, icon: ScrollText },
+            { href: "/mitm", label: t.nav.proxyInfo, icon: Info },
+            { href: "/rewrite", label: t.nav.ruleSets, icon: Database },
+          ],
+        },
+        {
+          group: t.nav.groupSystem,
+          items: [
+            { href: "/modules", label: t.nav.providers, icon: Package },
+            { href: "/profiles", label: t.nav.profiles, icon: FileText },
+            { href: "/scripts", label: t.nav.tasks, icon: CalendarClock },
+            { href: "/dns", label: t.nav.dns, icon: Globe },
+            { href: "/config-editor", label: t.nav.configEditor, icon: FileCode2 },
+          ],
+        },
+      ];
 
-  const bottomItems = [
-    { href: "/settings", label: t.nav.settings, icon: Settings },
-    { href: "/system", label: t.nav.system, icon: Server },
-  ];
+  const bottomItems = desktopMode
+    ? [{ href: "/settings", label: t.nav.settings, icon: Settings }]
+    : [
+        { href: "/settings", label: t.nav.settings, icon: Settings },
+        { href: "/system", label: t.nav.system, icon: Server },
+      ];
 
   const sidebarShell = (
     <aside
@@ -110,7 +134,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
       </div>
 
       {/* Mihomo status */}
-      <div className="mx-4 mb-5 flex items-center justify-between rounded-[9px] border border-black/5 bg-white/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[var(--surface-2)]">
+      {!desktopMode && <div className="mx-4 mb-5 flex items-center justify-between rounded-[9px] border border-black/5 bg-white/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[var(--surface-2)]">
         <div className="flex items-center gap-1.5">
           <span
             className={cn(
@@ -125,7 +149,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
         <span className="text-[13px] font-medium text-[var(--muted)]">
           {version ? `v${version}` : t.status.unknown}
         </span>
-      </div>
+      </div>}
 
       {/* Nav */}
       <nav className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">

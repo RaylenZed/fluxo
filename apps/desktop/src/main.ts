@@ -8,6 +8,7 @@ const serverPort = Number(process.env.FLUXO_DESKTOP_SERVER_PORT ?? 19090);
 const webPort = isDev ? 38080 : Number(process.env.FLUXO_DESKTOP_WEB_PORT ?? 18080);
 const backendUrl = `http://127.0.0.1:${serverPort}`;
 const webUrl = `http://127.0.0.1:${webPort}`;
+const initialWebUrl = `${webUrl}/policies`;
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -43,6 +44,7 @@ function serviceEnv(): NodeJS.ProcessEnv {
     DB_PATH: paths.dbPath,
     CONFIG_PATH: paths.configPath,
     FLUXO_AUTH_DISABLED: '1',
+    FLUXO_DESKTOP_MODE: '1',
     FLUXO_APPLY_MODE: 'manual',
     FLUXO_DEFAULT_APPLY_MODE: 'manual',
     CORS_ORIGIN: webUrl,
@@ -149,6 +151,18 @@ function createWindow(): BrowserWindow {
     }
   });
 
+  window.webContents.on('context-menu', () => {
+    Menu.buildFromTemplate([
+      { role: 'undo', label: '撤销' },
+      { role: 'redo', label: '重做' },
+      { type: 'separator' },
+      { role: 'cut', label: '剪切' },
+      { role: 'copy', label: '复制' },
+      { role: 'paste', label: '粘贴' },
+      { role: 'selectAll', label: '全选' },
+    ]).popup({ window });
+  });
+
   return window;
 }
 
@@ -234,6 +248,21 @@ function installMenu() {
       ],
     },
     {
+      label: '编辑',
+      submenu: [
+        { role: 'undo', label: '撤销' },
+        { role: 'redo', label: '重做' },
+        { type: 'separator' },
+        { role: 'cut', label: '剪切' },
+        { role: 'copy', label: '复制' },
+        { role: 'paste', label: '粘贴' },
+        { role: 'pasteAndMatchStyle', label: '粘贴并匹配样式' },
+        { role: 'delete', label: '删除' },
+        { type: 'separator' },
+        { role: 'selectAll', label: '全选' },
+      ],
+    },
+    {
       label: '视图',
       submenu: [
         { role: 'reload' },
@@ -275,7 +304,7 @@ app.whenReady().then(async () => {
   mainWindow = createWindow();
   try {
     await startServices();
-    await mainWindow.loadURL(webUrl);
+    await mainWindow.loadURL(initialWebUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await dialog.showMessageBox(mainWindow, {
@@ -289,7 +318,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createWindow();
-      void mainWindow.loadURL(webUrl);
+      void mainWindow.loadURL(initialWebUrl);
     }
   });
 });

@@ -211,19 +211,21 @@ export function useActivateProfile() {
 }
 
 // --- Mihomo ---
-export function useMihomoStatus() {
+export function useMihomoStatus(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['mihomo', 'status'],
     queryFn: mihomoApi.status,
+    enabled: options.enabled ?? true,
     refetchInterval: 10_000,
     retry: false,
   });
 }
 
-export function useMihomoProxies() {
+export function useMihomoProxies(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['mihomo', 'proxies'],
     queryFn: mihomoApi.proxies,
+    enabled: options.enabled ?? true,
     staleTime: 10_000,
     refetchInterval: 10_000,
     retry: 1,

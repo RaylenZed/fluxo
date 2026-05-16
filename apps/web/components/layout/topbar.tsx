@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useLocale } from "@/lib/i18n/context";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { useDesktopMode } from "@/lib/desktop";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +22,7 @@ type TunStatus = {
   applyMode: "manual" | "managed";
 };
 
-function useTunState() {
+function useTunState(enabled: boolean) {
   const qc = useQueryClient();
   const { data: tunStatus } = useQuery<TunStatus>({
     queryKey: ["tun-state"],
@@ -41,6 +42,7 @@ function useTunState() {
       const desired = settings['tun.enable'] === true || settings['tun.enable'] === 'true';
       return { desired, active: false, status: "unknown" as const, applyMode };
     },
+    enabled,
     staleTime: 30_000,
   });
   const tunEnabled = tunStatus?.desired ?? false;
@@ -128,9 +130,10 @@ function UserMenu() {
 export function Topbar({ title, description, children }: TopbarProps) {
   const { theme, setTheme } = useTheme();
   const { t } = useLocale();
-  const { tunEnabled, tunStatus, toggle } = useTunState();
+  const desktopMode = useDesktopMode();
+  const { tunEnabled, tunStatus, toggle } = useTunState(!desktopMode);
   const tunMismatch = tunStatus?.desired && !tunStatus.active;
-  const showTunSwitch = tunStatus?.applyMode === "managed";
+  const showTunSwitch = !desktopMode && tunStatus?.applyMode === "managed";
 
   return (
     <header className="sticky top-0 z-10 flex min-h-[86px] items-start gap-5 border-b border-black/5 bg-[var(--background)]/92 px-7 pb-4 pt-6 backdrop-blur-md">
@@ -187,13 +190,13 @@ export function Topbar({ title, description, children }: TopbarProps) {
         </button>
 
         {/* Notifications — circular */}
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-all hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]">
+        {!desktopMode && <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-all hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]">
           <Bell className="h-4 w-4" />
           <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[var(--brand-500)] border-2 border-[var(--surface)]" />
-        </button>
+        </button>}
 
         {/* User profile chip with logout dropdown */}
-        <UserMenu />
+        {!desktopMode && <UserMenu />}
       </div>
     </header>
   );

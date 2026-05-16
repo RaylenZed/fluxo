@@ -26,6 +26,7 @@ import {
 import { proxiesApi, providersApi, type ProxyRow, type GroupRow, type ProviderRow, type MihomoProxyState } from "@/lib/api";
 import { toast } from "sonner";
 import { useLocale } from "@/lib/i18n/context";
+import { useDesktopMode } from "@/lib/desktop";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const groupTypeIcons = {
@@ -140,6 +141,7 @@ function GroupCard({
   onEdit,
   onDelete,
   onLatencyTest,
+  desktopMode,
 }: {
   group: GroupRow;
   proxyNodes: ProxyRow[];
@@ -150,6 +152,7 @@ function GroupCard({
   onEdit: () => void;
   onDelete: () => void;
   onLatencyTest: () => void;
+  desktopMode: boolean;
 }) {
   const { t } = useLocale();
 
@@ -305,6 +308,8 @@ function GroupCard({
   }
 
   async function switchProxy(name: string) {
+    if (desktopMode) return;
+
     if (!canUseRuntimeNode(name)) {
       toast.error(`${group.name}: ${t.policies.switchFailed}`);
       return;
@@ -356,8 +361,8 @@ function GroupCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 rounded-[14px] bg-white/95 p-2 shadow-[0_14px_38px_rgba(24,32,48,0.22)] backdrop-blur dark:bg-[var(--surface)]">
             <DropdownMenuItem onClick={onEdit}>{t.policies.editGroup}</DropdownMenuItem>
-            <DropdownMenuItem disabled={!runtimeReady || hasPendingRuntimeChanges} onClick={onLatencyTest}>{t.policies.latencyTest}</DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {!desktopMode && <DropdownMenuItem disabled={!runtimeReady || hasPendingRuntimeChanges} onClick={onLatencyTest}>{t.policies.latencyTest}</DropdownMenuItem>}
+            {!desktopMode && <DropdownMenuSeparator />}
             <DropdownMenuItem className="text-red-600" onClick={onDelete}>{t.policies.deleteGroup}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -403,7 +408,7 @@ function GroupCard({
             <DropdownMenuSeparator />
             <div className="max-h-[340px] overflow-y-auto px-1.5 pb-1.5">
               {displayedNodes.map((node) => {
-                const disabled = !runtimeReady || !node.loadedInRuntime;
+                const disabled = desktopMode || !runtimeReady || !node.loadedInRuntime;
                 const selected = selectedProxy === node.name;
                 return (
                   <DropdownMenuItem
@@ -500,6 +505,7 @@ function SectionHeader({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PoliciesPage() {
+  const desktopMode = useDesktopMode();
   const [outboundMode, setOutboundMode] = useState("rule");
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [showNewGroup, setShowNewGroup] = useState(false);
@@ -645,7 +651,7 @@ export default function PoliciesPage() {
   const updateGroup = useUpdateGroup();
   const deleteGroup = useDeleteGroup();
   const applyConfig = useApplyConfig();
-  const runtimeProxiesQuery = useMihomoProxies();
+  const runtimeProxiesQuery = useMihomoProxies({ enabled: !desktopMode });
   const configModeQuery = useQuery({
     queryKey: ["config-mode"],
     queryFn: async () => {
@@ -661,8 +667,8 @@ export default function PoliciesPage() {
   const proxyNodes = proxiesQuery.data ?? [];
   const proxyGroups = groupsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
-  const runtimeProxyMap = runtimeProxiesQuery.data?.proxies ?? null;
-  const runtimeReady = Boolean(runtimeProxyMap);
+  const runtimeProxyMap = desktopMode ? null : runtimeProxiesQuery.data?.proxies ?? null;
+  const runtimeReady = desktopMode ? true : Boolean(runtimeProxyMap);
   const runtimeLoadedNames = runtimeProxyMap ? new Set(Object.keys(runtimeProxyMap)) : null;
 
   const hasPendingRuntimeSync = runtimeLoadedNames
@@ -678,7 +684,7 @@ export default function PoliciesPage() {
   return (
     <div className="flex flex-col h-full">
       <Topbar title={t.policies.title} description={`${proxyNodes.length} nodes · ${proxyGroups.length} groups`}>
-        {managedMode && <ModeSegment
+        {!desktopMode && managedMode && <ModeSegment
           value={outboundMode}
           onChange={switchMode}
           options={[
@@ -706,7 +712,7 @@ export default function PoliciesPage() {
       </Topbar>
 
       <div className="flex-1 overflow-auto px-8 py-7">
-        {runtimeProxiesQuery.isError && (
+        {!desktopMode && runtimeProxiesQuery.isError && (
           <div className="mb-5 flex items-start gap-3 rounded-[12px] border border-amber-200 bg-[#fff9e9] px-5 py-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <ServerCrash className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
@@ -716,7 +722,7 @@ export default function PoliciesPage() {
           </div>
         )}
 
-        {hasPendingRuntimeSync && (
+        {!desktopMode && hasPendingRuntimeSync && (
           <div className="mb-6 flex items-start gap-3 rounded-[12px] border border-amber-200 bg-[#fff9e9] px-5 py-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <Clock className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
@@ -848,6 +854,7 @@ export default function PoliciesPage() {
                   onEdit={() => setEditingGroupId(group.id)}
                   onDelete={() => deleteGroup.mutate(group.id)}
                   onLatencyTest={() => testNodeLatency(group.name, undefined, "group")}
+                  desktopMode={desktopMode}
                 />
               ))}
               <button
